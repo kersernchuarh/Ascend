@@ -10,17 +10,12 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { PillBadge } from "@/components/shared/pill-badge";
-
-const QUICK_ACTIONS = [
-  "Plan my week",
-  "Generate revision timetable",
-  "Summarize homework",
-  "How can I improve?",
-];
+import { Button } from "@/components/ui/button";
+import { AI_QUICK_ACTIONS } from "@/data/dashboard";
 
 function FloatingAiButton() {
   const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
 
   return (
     <>
@@ -42,12 +37,23 @@ function FloatingAiButton() {
             </SheetDescription>
           </SheetHeader>
           <div className="flex flex-col gap-4 px-4 pb-6">
-            <Input placeholder="Ask Ascend anything..." className="h-11" />
+            <Input
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder="Ask Ascend anything..."
+              className="h-11"
+            />
             <div className="flex flex-wrap gap-2">
-              {QUICK_ACTIONS.map((action) => (
-                <PillBadge key={action} color="primary" className="h-7 px-3 text-body">
+              {AI_QUICK_ACTIONS.map((action) => (
+                <Button
+                  key={action}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setValue(action)}
+                >
                   {action}
-                </PillBadge>
+                </Button>
               ))}
             </div>
           </div>

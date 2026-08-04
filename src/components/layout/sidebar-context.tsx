@@ -3,7 +3,7 @@
 import {
   createContext,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -20,9 +20,11 @@ const STORAGE_KEY = "ascend:sidebar-collapsed";
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // One-time sync from a persisted browser preference (localStorage), which
     // cannot be read during SSR — an intentional exception to the lint rule below.
+    // useLayoutEffect (not useEffect) so a returning user's collapsed sidebar is
+    // corrected before paint, instead of flashing expanded then animating shut.
     const stored = window.localStorage.getItem(STORAGE_KEY) === "true";
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCollapsed(stored);

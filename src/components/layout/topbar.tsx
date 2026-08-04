@@ -1,12 +1,14 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { Bell, Search } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { MOCK_USER } from "@/data/mock";
+import { MOCK_USER, ROUTE_TITLES } from "@/data/mock";
 
-type TopbarProps = {
-  title?: string;
-};
+function Topbar() {
+  const pathname = usePathname();
+  const title = ROUTE_TITLES[pathname];
 
-function Topbar({ title }: TopbarProps) {
   return (
     <header className="sticky top-0 z-10 hidden h-[72px] shrink-0 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-md md:flex">
       <div className="min-w-0">

@@ -7,16 +7,15 @@ import { FloatingAiButton } from "@/components/layout/floating-ai-button";
 
 type AppShellProps = {
   children: ReactNode;
-  title?: string;
 };
 
-function AppShell({ children, title }: AppShellProps) {
+function AppShell({ children }: AppShellProps) {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar title={title} />
+          <Topbar />
           <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
             <div className="mx-auto w-full max-w-[1440px]">{children}</div>
           </main>

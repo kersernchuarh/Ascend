@@ -37,6 +37,19 @@ export const MOBILE_NAV: NavItem[] = [
   { label: "More", href: "/more", icon: MoreHorizontal },
 ];
 
+/** Topbar's page title per route — kept as an explicit lookup rather than derived
+ *  from the nav arrays above, since "/" and "/more" don't map 1:1 onto either list. */
+export const ROUTE_TITLES: Record<string, string> = {
+  "/": "Home",
+  "/tasks": "Tasks",
+  "/calendar": "Calendar",
+  "/habits": "Habits",
+  "/insights": "Insights",
+  "/ai": "AI Coach",
+  "/settings": "Settings",
+  "/more": "More",
+};
+
 export const MOCK_USER = {
   name: "Kersern",
   email: "sjiaiclubone@gmail.com",
