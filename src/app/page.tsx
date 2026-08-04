@@ -1,69 +1,104 @@
-import Image from "next/image";
+import { BookOpen, Droplets, Flame, LayoutDashboard, Moon } from "lucide-react";
+import { Card, CardContent } from "@/components/shared/card";
+import { SectionHeader } from "@/components/shared/section-header";
+import { MetricCard } from "@/components/shared/metric-card";
+import { PillBadge } from "@/components/shared/pill-badge";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { PILLAR_LIST } from "@/lib/pillars";
+
+const HABITS = [
+  { label: "Sleep", value: 82, icon: Moon, color: "primary" as const },
+  { label: "Exercise", value: 60, icon: Flame, color: "orange" as const },
+  { label: "Water", value: 45, icon: Droplets, color: "blue" as const },
+  { label: "Reading", value: 70, icon: BookOpen, color: "teal" as const },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="flex flex-col gap-8">
+      <SectionHeader
+        icon={LayoutDashboard}
+        title="Foundation Preview"
+        description="Phase 1 — design system & app shell. The real dashboard arrives in Phase 2."
+      />
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Study hours this week"
+          value="12.5"
+          unit="hrs"
+          icon={PILLAR_LIST[0].icon}
+          color={PILLAR_LIST[0].color}
+          trend={{ direction: "up", value: "18%", isPositive: true }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+        <MetricCard
+          label="Resting heart rate"
+          value="62"
+          unit="bpm"
+          icon={PILLAR_LIST[1].icon}
+          color={PILLAR_LIST[1].color}
+          trend={{ direction: "down", value: "4%", isPositive: true }}
+        />
+        <MetricCard
+          label="Mindful minutes"
+          value="24"
+          unit="min"
+          icon={PILLAR_LIST[2].icon}
+          color={PILLAR_LIST[2].color}
+        />
+        <MetricCard
+          label="Habits completed"
+          value="9/12"
+          icon={PILLAR_LIST[3].icon}
+          color={PILLAR_LIST[3].color}
+          trend={{ direction: "up", value: "2", isPositive: true }}
+        />
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardContent className="flex flex-col gap-4">
+            <SectionHeader title="Life pillars" description="The six pillars behind every score." />
+            <div className="flex flex-wrap gap-2">
+              {PILLAR_LIST.map((pillar) => (
+                <PillBadge key={pillar.id} color={pillar.color}>
+                  <pillar.icon className="size-3" strokeWidth={2} />
+                  {pillar.label}
+                </PillBadge>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <Button>Primary action</Button>
+              <Button variant="outline">Secondary</Button>
+              <Button variant="ghost">Ghost</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="flex flex-col gap-5">
+            <SectionHeader title="Habit tracker" description="Today's consistency across your routines." />
+            {HABITS.map((habit) => {
+              const Icon = habit.icon;
+              return (
+                <div key={habit.label} className="flex items-center gap-3">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-surface-2 text-muted-foreground">
+                    <Icon className="size-4" strokeWidth={2} />
+                  </span>
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-body">
+                      <span className="text-foreground">{habit.label}</span>
+                      <span className="text-muted-foreground">{habit.value}%</span>
+                    </div>
+                    <Progress value={habit.value} className="h-1.5" />
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }

@@ -21,8 +21,11 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "true") setCollapsed(true);
+    // One-time sync from a persisted browser preference (localStorage), which
+    // cannot be read during SSR — an intentional exception to the lint rule below.
+    const stored = window.localStorage.getItem(STORAGE_KEY) === "true";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCollapsed(stored);
   }, []);
 
   const toggle = () => {
