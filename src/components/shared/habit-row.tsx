@@ -1,9 +1,19 @@
 import { cn } from "@/lib/utils";
 import { ACCENT_CHIP_CLASSES, ACCENT_SOLID_CLASSES } from "@/lib/colors";
 import { Progress } from "@/components/ui/progress";
-import type { HabitEntry } from "@/data/dashboard";
+import type { Habit } from "@/domain/types";
 
-function HabitRow({ habit, className }: { habit: HabitEntry; className?: string }) {
+function HabitRow({
+  habit,
+  value,
+  className,
+}: {
+  habit: Habit;
+  /** Today's logged value, 0-100. `undefined` means "not logged today" —
+   *  shown honestly rather than defaulting to 0. */
+  value: number | undefined;
+  className?: string;
+}) {
   const Icon = habit.icon;
 
   return (
@@ -19,10 +29,12 @@ function HabitRow({ habit, className }: { habit: HabitEntry; className?: string 
       <div className="flex flex-1 flex-col gap-1.5">
         <div className="flex items-center justify-between text-body">
           <span className="text-foreground">{habit.label}</span>
-          <span className="text-muted-foreground">{habit.value}%</span>
+          <span className="text-muted-foreground">
+            {value != null ? `${value}%` : "Not logged today"}
+          </span>
         </div>
         <Progress
-          value={habit.value}
+          value={value ?? 0}
           className="h-1.5"
           indicatorClassName={ACCENT_SOLID_CLASSES[habit.color]}
         />
