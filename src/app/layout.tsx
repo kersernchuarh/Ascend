@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, Geist_Mono } from "next/font/google";
+import type { ReactNode } from "react";
+import { Inter } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
@@ -10,22 +11,18 @@ const fontSans = Inter({
   display: "swap",
 });
 
-const fontMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
-
 export const metadata: Metadata = {
   title: "Ascend",
   description: "Your AI-powered life operating system.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Typed explicitly rather than via Next's generated `LayoutProps` global, so
+// `tsc --noEmit` works on a fresh clone before the first build has run.
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`dark ${fontSans.variable} ${fontMono.variable} h-full antialiased`}
+      className={`dark ${fontSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <TooltipProvider delayDuration={200}>
