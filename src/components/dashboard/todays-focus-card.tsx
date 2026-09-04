@@ -44,31 +44,39 @@ function TodaysFocusCard() {
               return (
                 <div
                   key={task.id}
-                  className="flex items-center gap-3 border-b border-border py-3 last:border-0"
+                  className="flex items-start gap-3 border-b border-border py-3 last:border-0"
                 >
                   <Checkbox
                     checked={task.done}
                     onCheckedChange={() => toggleTask(task.id)}
+                    className="mt-[3px] shrink-0"
                   />
-                  <span
-                    className={cn(
-                      "flex-1 truncate text-body transition-colors duration-200",
-                      task.done
-                        ? "text-muted-foreground line-through"
-                        : "text-foreground"
-                    )}
-                  >
-                    {task.title}
-                  </span>
-                  <PillBadge color={pillar.color}>
-                    <Icon className="size-3" />
-                    {pillar.label}
-                  </PillBadge>
-                  {task.time ? (
-                    <span className="shrink-0 text-caption text-muted-foreground">
-                      {task.time}
+                  {/* Title sits on its own line above the pillar/time meta row: in the
+                      three-column grid the card is too narrow to fit all three inline
+                      without truncating the title down to a few characters. */}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <span
+                      className={cn(
+                        "text-body transition-colors duration-200",
+                        task.done
+                          ? "text-muted-foreground line-through"
+                          : "text-foreground"
+                      )}
+                    >
+                      {task.title}
                     </span>
-                  ) : null}
+                    <div className="flex items-center gap-2">
+                      <PillBadge color={pillar.color}>
+                        <Icon className="size-3" />
+                        {pillar.label}
+                      </PillBadge>
+                      {task.time ? (
+                        <span className="text-caption text-muted-foreground">
+                          {task.time}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               );
             })}

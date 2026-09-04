@@ -52,7 +52,7 @@ export const ROUTE_TITLES: Record<string, string> = {
 
 export const MOCK_USER = {
   name: "Kersern",
-  email: "sjiaiclubone@gmail.com",
+  email: "student@ascend.example",
   initials: "K",
   plan: "Student",
 };
