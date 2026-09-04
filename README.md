@@ -122,6 +122,7 @@ src/
     layout/       App shell — sidebar, topbar, mobile nav
     dashboard/    Home dashboard cards
   data/           Mock data and its types
+  state/          Client-side shared state (task store)
   lib/            Pillar definitions, accent colour maps, utils
 ```
 
@@ -132,5 +133,9 @@ src/
 - **Server Components by default**; `"use client"` is pushed down to the leaves that
   need interactivity.
 - **Desktop and mobile Home are separate component trees**, not one responsive tree.
+  They share state through providers rather than duplicating it.
+- **Task state lives in one place** — `state/task-context.tsx`, mounted in the app
+  shell so it survives navigation. Read it with `useTasks()`; never copy tasks into
+  component state. Data definitions stay in `data/`, state logic in `state/`.
 - Accent colours are applied through the maps in `lib/colors.ts` rather than inline
   conditionals, so contrast fixes happen in one place.

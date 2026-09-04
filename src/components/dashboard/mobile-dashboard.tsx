@@ -6,13 +6,12 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Sparkles, ChevronRight } from "lucide-react";
 import { MOCK_USER } from "@/data/mock";
 import {
-  TODAY_TASKS,
   HABITS,
   CALENDAR_PREVIEW,
   OVERALL_BALANCE_SCORE,
   AI_INSIGHT,
-  type DashboardTask,
 } from "@/data/dashboard";
+import { useTasks } from "@/state/task-context";
 import { PILLARS } from "@/lib/pillars";
 import { ACCENT_SOLID_CLASSES, type AccentColor } from "@/lib/colors";
 import { HabitRow } from "@/components/shared/habit-row";
@@ -37,7 +36,11 @@ function getBalanceTakeaway(score: number): { label: string; color: AccentColor 
 function MobileDashboard() {
   const prefersReducedMotion = useReducedMotion();
   const [greeting, setGreeting] = React.useState("Good day");
-  const [tasks, setTasks] = React.useState<DashboardTask[]>(() => TODAY_TASKS.slice(0, 4));
+  const { todayTasks, toggleTask } = useTasks();
+  // Mobile shows a short preview of today rather than the full list; the tasks
+  // themselves come from the shared store, so toggling here and on desktop
+  // acts on the same state.
+  const tasks = todayTasks.slice(0, 4);
 
   React.useEffect(() => {
     // One-time sync with the visitor's local clock — unknowable during SSR,
@@ -45,12 +48,6 @@ function MobileDashboard() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setGreeting(getGreeting(new Date().getHours()));
   }, []);
-
-  const toggleTask = (id: string) => {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, done: !task.done } : task))
-    );
-  };
 
   const takeaway = getBalanceTakeaway(OVERALL_BALANCE_SCORE);
   const previewHabits = HABITS.slice(0, 3);
