@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import { ClipboardCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
@@ -8,25 +7,17 @@ import { PillBadge } from "@/components/shared/pill-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { PILLARS } from "@/lib/pillars";
-import { TODAY_TASKS, type DashboardTask } from "@/data/dashboard";
+import { useTasks } from "@/state/task-context";
 
 function TodaysFocusCard() {
-  const [tasks, setTasks] = React.useState<DashboardTask[]>(TODAY_TASKS);
-
-  const toggleTask = (id: string) => {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, done: !task.done } : task))
-    );
-  };
-
-  const doneCount = tasks.filter((task) => task.done).length;
+  const { todayTasks: tasks, completedCount, toggleTask } = useTasks();
 
   return (
     <Card className="w-full">
       <CardContent>
         <SectionHeader
           title="Today's Focus"
-          description={`${doneCount}/${tasks.length} completed`}
+          description={`${completedCount}/${tasks.length} completed`}
         />
         {tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
