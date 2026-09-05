@@ -43,6 +43,12 @@ type TaskContextValue = {
    *  (Phase 4), but this capability is real and persisted like everything
    *  else, not a stub. */
   addTask: (input: Omit<Task, "id" | "createdAt">) => void;
+  /** Permanently removes a task. Unlike `removeFromToday`, this is real
+   *  deletion — Work's task rows are leaf nodes with nothing nested beneath
+   *  them, so there is no orphaning risk to guard against (contrast
+   *  `DeliverableProvider.deleteDeliverable`, which callers must pair with
+   *  unlinking this task's `deliverableId`). */
+  deleteTask: (id: string) => void;
   /** Moves a task up/down relative to its neighbors *within `todayTasks`* —
    *  implemented as swapping the two tasks' positions in the underlying
    *  `tasks` array (every other task's relative order is untouched), rather
@@ -158,6 +164,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     [now]
   );
 
+  const deleteTask = useCallback((id: string) => {
+    setTasks((prev) => prev.filter((task) => task.id !== id));
+  }, []);
+
   const removeFromToday = useCallback((id: string) => {
     setTasks((prev) =>
       prev.map((task) => (task.id === id ? { ...task, scheduledFor: undefined } : task))
@@ -178,10 +188,21 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       toggleTask,
       updateTask,
       addTask,
+      deleteTask,
       moveTaskInToday,
       removeFromToday,
     }),
-    [tasks, todayTasks, status, toggleTask, updateTask, addTask, moveTaskInToday, removeFromToday]
+    [
+      tasks,
+      todayTasks,
+      status,
+      toggleTask,
+      updateTask,
+      addTask,
+      deleteTask,
+      moveTaskInToday,
+      removeFromToday,
+    ]
   );
 
   return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;

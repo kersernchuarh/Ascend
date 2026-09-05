@@ -6,15 +6,18 @@ import { PillBadge } from "@/components/shared/pill-badge";
 import { cn } from "@/lib/utils";
 import { formatDuration, formatRelativeDay, formatTime } from "@/lib/format-date";
 import { deadlineRisk } from "@/domain/time";
+import { effectiveDueAt } from "@/domain/work";
 import { PILLARS } from "@/lib/pillars";
-import type { Deadline, Task } from "@/domain/types";
+import type { Deliverable, Task } from "@/domain/types";
 
 type TaskRowProps = {
   task: Task;
-  /** The `Deadline` this task links to via `deadlineId`, if any — resolved
-   *  by the caller (both Home trees already load deadlines for the
-   *  Upcoming card, so this avoids each row re-deriving it independently). */
-  deadline?: Deadline;
+  /** The `Deliverable` this task links to via `deliverableId`, if any —
+   *  resolved by the caller (both Home trees already load deliverables for
+   *  the Upcoming card, so this avoids each row re-deriving it
+   *  independently). Due info shown here is the task's own `dueAt` when set,
+   *  else this deliverable's (`domain/work.effectiveDueAt`). */
+  deliverable?: Deliverable;
   now: Date;
   isFirst: boolean;
   isLast: boolean;
@@ -34,7 +37,7 @@ type TaskRowProps = {
  */
 function TaskRow({
   task,
-  deadline,
+  deliverable,
   now,
   isFirst,
   isLast,
@@ -45,7 +48,8 @@ function TaskRow({
 }: TaskRowProps) {
   const pillar = PILLARS[task.pillar];
   const Icon = pillar.icon;
-  const isUrgent = deadline ? deadlineRisk(deadline.dueAt, now) !== "on-track" : false;
+  const dueAt = effectiveDueAt(task, deliverable);
+  const isUrgent = dueAt ? deadlineRisk(dueAt, now) !== "on-track" : false;
 
   return (
     <li className="group flex items-start gap-2 border-b border-border py-3 last:border-0">
@@ -79,12 +83,12 @@ function TaskRow({
               ~{formatDuration(task.estimateMinutes)}
             </span>
           ) : null}
-          {deadline ? (
+          {dueAt ? (
             isUrgent ? (
-              <PillBadge color="red">{formatRelativeDay(deadline.dueAt, now)}</PillBadge>
+              <PillBadge color="red">{formatRelativeDay(dueAt, now)}</PillBadge>
             ) : (
               <span className="text-caption text-muted-foreground">
-                Due {formatRelativeDay(deadline.dueAt, now)}
+                Due {formatRelativeDay(dueAt, now)}
               </span>
             )
           ) : null}

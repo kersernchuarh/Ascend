@@ -1,4 +1,4 @@
-import type { Deadline } from "./types";
+import type { Deliverable } from "./types";
 
 /**
  * Pure, deterministic time utilities. No React, no hidden `new Date()` —
@@ -45,6 +45,17 @@ export function toIsoDateLocal(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+/** Inverse of `toIsoDateLocal` — parses a `YYYY-MM-DD` local calendar date
+ *  (the exact format `<input type="date">` produces) into midnight local
+ *  time on that day. Deliberately not `new Date(dateStr)`: passed a bare
+ *  date with no time, that constructor parses it as UTC midnight, which can
+ *  silently land on the wrong local calendar day — the same class of bug
+ *  `toIsoDateLocal` itself was introduced to avoid on the way out. */
+export function fromIsoDateLocal(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
 /** Whether `a` and `b` fall on the same calendar day, local time. */
@@ -124,9 +135,9 @@ export function deadlineRisk(
   return "on-track";
 }
 
-/** Convenience overload of `deadlineRisk` for a `Deadline` entity. */
-export function deadlineRiskFor(deadline: Deadline, now: Date): DeadlineRisk {
-  return deadlineRisk(deadline.dueAt, now);
+/** Convenience overload of `deadlineRisk` for a `Deliverable` entity. */
+export function deadlineRiskFor(deliverable: Deliverable, now: Date): DeadlineRisk {
+  return deadlineRisk(deliverable.dueAt, now);
 }
 
 /** Percentage (0-100) of `items` with a `completedAt` set. Returns 0 for an

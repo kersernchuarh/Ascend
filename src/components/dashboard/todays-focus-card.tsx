@@ -7,37 +7,56 @@ import { SectionHeader } from "@/components/shared/section-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TaskRow } from "@/components/dashboard/task-row";
 import { AddTaskRow } from "@/components/dashboard/add-task-row";
+import { AddExistingTaskRow } from "@/components/dashboard/add-existing-task-row";
 import { useTasks } from "@/state/task-context";
+import { useDeliverables } from "@/state/deliverable-context";
 import { useNow } from "@/domain/use-now";
-import { createSeedDeadlines } from "@/data/dashboard";
+import { isDueToday } from "@/domain/time";
 import type { PillarId } from "@/lib/pillars";
 
 function TodaysFocusCard() {
   const {
+    tasks: allTasks,
     todayTasks: tasks,
     completedCount,
     toggleTask,
     status,
     addTask,
+    updateTask,
     moveTaskInToday,
     removeFromToday,
   } = useTasks();
+  const { deliverables } = useDeliverables();
   const now = useNow();
 
-  // Deadlines aren't shared context state (still seed-only, no CRUD exists —
-  // see Phase 1/2 notes), so this calls the same pure factory UpcomingCard
-  // does; same `now` in, same result out, no drift risk between the two.
-  const deadlines = useMemo(() => (now ? createSeedDeadlines(now) : []), [now]);
-  const deadlineById = useMemo(
-    () => new Map(deadlines.map((d) => [d.id, d])),
-    [deadlines]
+  // Same shared `DeliverableProvider` state Work reads and writes — editing
+  // a deliverable's due date there is reflected here immediately, with no
+  // separate representation to fall out of sync (PRODUCT_BLUEPRINT.md §7.2).
+  const deliverableById = useMemo(
+    () => new Map(deliverables.map((d) => [d.id, d])),
+    [deliverables]
   );
+
+  // The Work backlog: real, incomplete tasks not already part of today's
+  // plan — what `AddExistingTaskRow` lets the user pull in without
+  // recreating them (Home/Work sync, the other direction from `addTask`).
+  const backlogTasks = useMemo(() => {
+    if (!now) return [];
+    return allTasks.filter(
+      (task) => !task.completedAt && !(task.scheduledFor && isDueToday(task.scheduledFor, now))
+    );
+  }, [allTasks, now]);
 
   const allDone = status === "ready" && tasks.length > 0 && completedCount === tasks.length;
 
   function handleAdd(title: string, pillar: PillarId) {
     if (!now) return;
     addTask({ title, pillar, scheduledFor: now.toISOString() });
+  }
+
+  function handleScheduleExisting(id: string) {
+    if (!now) return;
+    updateTask(id, { scheduledFor: now.toISOString() });
   }
 
   return (
@@ -73,7 +92,7 @@ function TodaysFocusCard() {
               <TaskRow
                 key={task.id}
                 task={task}
-                deadline={task.deadlineId ? deadlineById.get(task.deadlineId) : undefined}
+                deliverable={task.deliverableId ? deliverableById.get(task.deliverableId) : undefined}
                 now={now ?? new Date()}
                 isFirst={index === 0}
                 isLast={index === tasks.length - 1}
@@ -85,7 +104,12 @@ function TodaysFocusCard() {
             ))}
           </ul>
         )}
-        {status === "ready" ? <AddTaskRow onAdd={handleAdd} /> : null}
+        {status === "ready" ? (
+          <>
+            <AddTaskRow onAdd={handleAdd} />
+            <AddExistingTaskRow backlogTasks={backlogTasks} onSchedule={handleScheduleExisting} />
+          </>
+        ) : null}
       </CardContent>
     </Card>
   );

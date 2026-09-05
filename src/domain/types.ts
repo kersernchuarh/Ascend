@@ -19,12 +19,14 @@ import type { AccentColor } from "@/lib/colors";
  *
  * Fields considered and deliberately excluded, to avoid inventing schema no
  * screen reads yet (PRODUCT_BLUEPRINT.md §6.2, §10):
- * - `description` — nothing renders or edits one today.
+ * - `description` — nothing renders or edits one today; `Deliverable` gets
+ *   one instead, where assignment notes actually have somewhere to live.
  * - `priority` — nothing sets or reads it; due-date proximity already drives
  *   the only prioritisation signal that exists (`deadlineRisk`).
- * - a `projectId`/"project relationship" — there is no Project/Subject entity
- *   yet (that's Phase 4's job). `deadlineId` below is the relationship that
- *   *is* justified today.
+ * - `subjectId` — a task reaches a `Subject` only via its `Deliverable`.
+ *   Giving `Task` its own `subjectId` alongside `deliverableId` would let
+ *   the two disagree (a task filed under Chemistry whose deliverable is a
+ *   Math problem set); one path to Subject is enough.
  *
  * `status` is deliberately not a separate field: it is fully determined by
  * whether `completedAt` is set, and keeping both would let them disagree.
@@ -46,29 +48,60 @@ export type Task = {
   /** Planned effort in minutes, for future estimate-vs-actual comparison
    *  (blueprint §10) once sessions exist. */
   estimateMinutes?: number;
-  /** Optional link to the `Deadline` this task contributes toward. */
-  deadlineId?: string;
+  /** A task's own due date/time — for a standalone dated task with no
+   *  `Deliverable` ("renew library card by Friday"). When the task *is*
+   *  linked to a `deliverableId`, callers should prefer the deliverable's
+   *  `dueAt` for display (see `domain/work.effectiveDueAt`) and treat this
+   *  as an override, not a duplicate of it. */
+  dueAt?: string;
+  /** Optional link to the `Deliverable` this task contributes toward. */
+  deliverableId?: string;
 };
 
-/** A externally-imposed, dated obligation — "Chemistry lab report due
- *  tomorrow". Distinct from `Task`: a deadline is a thing that comes due, a
- *  task is an action the user takes (see blueprint §6.1's resolution of the
- *  Task/Deadline overlap). No `urgent` flag: urgency is derived from `dueAt`
- *  via `deadlineRisk`, never hand-authored. */
-export type Deadline = {
+/** An academic course or personal area of work — "Chemistry", "History",
+ *  "CS Assignment prep". Owns no data of its own beyond a name; exists only
+ *  to group `Deliverable`s the way the student actually thinks about their
+ *  work (PRODUCT_BLUEPRINT.md §6.2, §7.2's `Work` section). No `pillar` or
+ *  `color`: a subject's deliverables already carry pillar identity, and a
+ *  second, possibly-disagreeing color would just be visual noise. */
+export type Subject = {
+  id: string;
+  name: string;
+  createdAt: string;
+};
+
+/** A graded or externally-due artefact — "Chemistry lab report", "CS
+ *  Assignment 2". Distinct from `Task`: a deliverable is a thing that comes
+ *  due, a task is an action the user takes toward it (blueprint §6.1's
+ *  resolution of the Task/Deadline overlap — this type replaces `Deadline`
+ *  outright, extended with the fields a real Work page needs). No `status`
+ *  enum, for the same reason as `Task`: completion is `completedAt`
+ *  presence, meaning "submitted". No `weight` — nothing reads it yet. */
+export type Deliverable = {
   id: string;
   title: string;
   pillar: PillarId;
-  /** ISO datetime the deadline is due. When `allDay` is true this is set to
-   *  the end of that calendar day (see `domain/time.endOfDay`) — a real
+  /** Optional grouping under a `Subject`. Absent means it shows in Work's
+   *  "Unassigned" group rather than under any subject — not every deliverable
+   *  is academic (e.g. a "Dentist appointment" follow-up form). */
+  subjectId?: string;
+  /** ISO datetime the deliverable is due. When `allDay` is true this is set
+   *  to the end of that calendar day (see `domain/time.endOfDay`) — a real
    *  instant to compare against, without inventing a submission time nobody
    *  actually specified. */
   dueAt: string;
-  /** True when only the day is known ("due tomorrow"), not a specific time.
-   *  Every seeded deadline today is day-granularity — this is what lets the
-   *  formatter show "Tomorrow" instead of a fabricated "Tomorrow, 11:59 PM". */
+  /** True when only the day is known ("due tomorrow"), not a specific time. */
   allDay: boolean;
+  /** Planned effort in minutes — comparable against sessions logged toward
+   *  this deliverable's tasks (`domain/work.loggedMinutesForDeliverable`). */
+  estimateMinutes?: number;
+  /** Free-text notes — assignment instructions, a rubric link. Unlike
+   *  `Task`, a deliverable is durable and detail-bearing enough that this
+   *  has a real use even before any screen needs `Task.description`. */
+  description?: string;
   createdAt: string;
+  /** ISO datetime marked "submitted"; absent means still outstanding. */
+  completedAt?: string;
 };
 
 /** A fixed, non-movable block of time — a class, a CCA, an appointment. */
@@ -97,7 +130,12 @@ export type StudySession = {
    *  per the product's own framing; plenty of real focus time has no task
    *  attached. */
   taskId?: string;
-  deadlineId?: string;
+  /** Optional direct association with a `Deliverable`, for focus time not
+   *  tied to any one task (blueprint §6.3: "a Session logs work on a Task or
+   *  directly on a Deliverable"). No picker sets this yet — Focus Sessions
+   *  currently only ever attach via `taskId` — but the field is real and
+   *  read by `domain/work.loggedMinutesForDeliverable`. */
+  deliverableId?: string;
   /** When the session was intended to start — equal to `actualStart` in the
    *  current timer, which has no "schedule for later" concept yet. */
   plannedStart: string;
