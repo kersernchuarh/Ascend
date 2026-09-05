@@ -6,6 +6,7 @@ import { SectionHeader } from "@/components/shared/section-header";
 import { PillBadge } from "@/components/shared/pill-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { formatTime } from "@/lib/format-date";
 import { PILLARS } from "@/lib/pillars";
 import { useTasks } from "@/state/task-context";
 
@@ -38,7 +39,7 @@ function TodaysFocusCard() {
                   className="flex items-start gap-3 border-b border-border py-3 last:border-0"
                 >
                   <Checkbox
-                    checked={task.done}
+                    checked={!!task.completedAt}
                     onCheckedChange={() => toggleTask(task.id)}
                     className="mt-[3px] shrink-0"
                   />
@@ -49,7 +50,7 @@ function TodaysFocusCard() {
                     <span
                       className={cn(
                         "text-body transition-colors duration-200",
-                        task.done
+                        task.completedAt
                           ? "text-muted-foreground line-through"
                           : "text-foreground"
                       )}
@@ -61,9 +62,9 @@ function TodaysFocusCard() {
                         <Icon className="size-3" />
                         {pillar.label}
                       </PillBadge>
-                      {task.time ? (
+                      {task.scheduledFor ? (
                         <span className="text-caption text-muted-foreground">
-                          {task.time}
+                          {formatTime(task.scheduledFor)}
                         </span>
                       ) : null}
                     </div>

@@ -1,8 +1,15 @@
-import { Sparkles, Lightbulb } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
-import { AI_INSIGHT } from "@/data/dashboard";
 
+/**
+ * The old copy here ("your productivity is 18% higher than last week") was
+ * an invented, unfalsifiable claim — no session or habit history exists to
+ * compute anything like it. Real insights need that history plus the AI
+ * capability set described in PRODUCT_BLUEPRINT.md §19, which is gated on
+ * the domain model, sessions and persistence landing first (Phases 2-3, 7).
+ * An honest "not yet" beats a confident, invented number.
+ */
 function AiInsightCard() {
   return (
     <Card className="w-full">
@@ -10,15 +17,12 @@ function AiInsightCard() {
         <SectionHeader
           icon={Sparkles}
           title="AI Insight"
-          description="Personalized, based on your last 7 days"
+          description="Appears once there's enough to learn from"
         />
-        <p className="text-body text-foreground leading-relaxed">
-          {AI_INSIGHT.message}
-        </p>
-        <div className="flex items-start gap-2 rounded-input border border-primary/15 bg-primary/5 p-3">
-          <Lightbulb className="size-4 shrink-0 mt-0.5 text-primary" />
-          <p className="text-body text-muted-foreground">
-            {AI_INSIGHT.recommendation}
+        <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+          <p className="text-body text-muted-foreground">Not enough activity yet</p>
+          <p className="max-w-[260px] text-caption text-muted-foreground">
+            Insights appear once you have a few days of real tasks and habits logged.
           </p>
         </div>
       </CardContent>
