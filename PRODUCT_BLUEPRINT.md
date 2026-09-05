@@ -477,6 +477,8 @@ Every number visible in the UI should trace to exactly one entry in this table. 
 
 **Anti-patterns to eliminate:** module-level computed constants (`OVERALL_BALANCE_SCORE`); component-local copies of shared data (already fixed for tasks in Phase 3 — the same discipline must hold for sessions and habits); and any storage of a value listed in §16's derivation catalogue.
 
+**Phase 2 update:** points 2 and 3 are done — `SessionProvider` and `HabitProvider` now exist alongside `TaskProvider`, each with the same `status: "loading" | "ready"` shape (no `"error"` variant yet: there's no UI to show one, so a failed read falls back to empty rather than surfacing a distinct state — see §18.1). `WorkProvider`/`PreferencesProvider` remain future work, gated on Subjects/Deliverables (Phase 4) and a Settings surface respectively. Provider nesting in `app-shell.tsx` is now four deep (Sidebar → Task → Session → Habit) — exactly the threshold point 5 above named; the next provider added should trigger the reducer-based-store reconsideration, not another level of nesting.
+
 ---
 
 ## 18. Persistence strategy
@@ -502,6 +504,26 @@ Async signatures from day one, even over synchronous storage, so swapping in Ind
 **Stage 3 — a real backend** only when there is a concrete need (multi-device sync being the plausible one). Explicitly out of scope for v1.
 
 **Export/import is a v1 requirement, not a stretch goal.** It is the user's only insurance against local-only storage, and it makes the eventual backend migration a feature rather than a data-loss event.
+
+### 18.1 Phase 2 implementation record
+
+What actually shipped, and two real decisions made while building it that revise what's written above.
+
+**Architecture as built.** `src/persistence/storage.ts` + `repository.ts` implement Stage 1 exactly as specified, with one addition: `Repository<T>` grew a fourth method, `replaceAll(entities)`, alongside `getAll`/`upsert`/`remove`. This wasn't a change of mind about the interface — it's what pairing this interface with React state actually requires: every consumer holds one in-memory array and needs to sync the whole thing on change, not chase individual row writes. `upsert`/`remove` remain for a future consumer that wants row-level writes.
+
+One refinement beyond what was written above: **storage is an injected dependency (`KeyValueStorage`, a `getItem`/`setItem` pair), not something the repository reaches for globally.** `getBrowserStorage()` is the single function that knows about `window`/SSR; everything else takes storage as a parameter. This is what makes the persistence layer fully unit-testable in plain Node with a hand-rolled fake — no jsdom needed — and it's what makes "storage unavailable" (SSR, or a browser with it disabled) a uniform `null` case instead of scattered `typeof window` checks.
+
+Versioning, corrupt-data handling and the SSR/hydration story shipped as specified: `{version, items}` envelopes, a preserved `:corrupt-backup-<timestamp>` blob on any unreadable read (verified live — corrupting `localStorage` mid-session does not crash the app, and the seed re-populates honestly), and hydration gated behind a client effect exactly like the existing sidebar/greeting precedent, exposed to components as `status: "loading" | "ready"` so a returning user's real data never gets mistaken for "no tasks" during the load window.
+
+**Export/import, Stage 2, Stage 3: still not built.** No Settings surface exists yet to expose export/import, and this phase didn't add one — introducing a new UI surface for it would have cut against "don't redesign the whole application" with no Settings page to put it in yet. The repository interface doesn't block adding it later; it just isn't wired to anything a user can click. IndexedDB and a backend remain exactly as far off as originally scoped.
+
+**Real decision #1 — `StudySession.outcome` is stored, not derived, and this reverses what §16's derivation catalogue implies.** The original plan was to tell a completed session from an abandoned one by comparing `actualEnd` to `plannedEnd` — the same "derive, don't duplicate" instinct applied to `Task.completedAt`. Live browser testing caught a real bug in that: if the tab is backgrounded, throttled, or the system sleeps mid-session, real wall-clock time can drift past the planned duration even though the countdown the user actually watched never reached zero — timestamps alone can't tell the two cases apart after the fact. Only the running timer knows which happened, in the moment it happens, so `outcome: "completed" | "abandoned"` is now a stored field, set directly by whichever code path (`secondsLeft` reaching 0, versus the reset handler) is doing the recording. `Task.completedAt` is unaffected by this — a task has no equivalent "wall clock can lie about which branch happened" problem, so it stays derived. The general rule this refines: derive a fact from other fields **only when no external factor (backgrounding, sleep, clock drift) can make the derivation disagree with what actually happened** — otherwise capture the fact directly, at the moment something that knows it for certain can record it.
+
+**Real decision #2 — `HabitLog` shipped presence-based (`{id, habitId, date}`), not the full `{cadence, target}` model §6.2/§12 describe.** That fuller model is still the right target — it's what unlocks cadence-aware adherence and cadence-aware streaks — but nothing in the product yet needs cadence (there's no UI for setting a "3× per week" target), and adding it now would be schema invented ahead of a consumer, the same discipline Phase 1 applied to `Task`. This phase's actual scope was narrower and more foundational: replace an undated, fabricated percentage with a real, dated, user-toggled record. `domain/metrics.habitStreak` is built and tested against the presence-based shape already, so adding cadence later is additive (a `cadence` field on `Habit` plus a richer adherence function alongside the existing streak one), not a rewrite.
+
+**Also corrected in passing:** Phase 1's seed habit data computed "today" via `date.toISOString().slice(0, 10)` — UTC, not local — which silently shifts to the wrong calendar day for part of the evening in any positive-UTC-offset zone (Singapore, this product's own stated primary market, included). Removing the fabricated seed data (below) also removed the bug; the replacement (`domain/time.toIsoDateLocal`) is timezone-correct and tested.
+
+**Fabrication removed, not merely relabeled, per this phase's integrity rule:** no `StudySession` or `HabitLog` history is fabricated anywhere. Both start genuinely empty for every user and contain only what they actually do from this point forward — Phase 1's `createSeedHabitLogs` (a same-day mock percentage per habit) is deleted outright, not reworked. This is a deliberate asymmetry with `Task`/`Deadline`/`CalendarEvent` seed data, which remains: those represent *present-state* demo content ("what's on your plate right now"), not a fabricated *past* — the thing this phase's rule actually targets.
 
 ---
 

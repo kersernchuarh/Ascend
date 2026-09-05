@@ -1,11 +1,5 @@
 import { BookOpen, Droplets, Flame, Moon, MonitorOff } from "lucide-react";
-import type {
-  Task,
-  Deadline,
-  CalendarEvent,
-  Habit,
-  HabitLog,
-} from "@/domain/types";
+import type { Task, Deadline, CalendarEvent, Habit } from "@/domain/types";
 import { addDays, endOfDay, startOfDay, startOfWeek } from "@/domain/time";
 
 /**
@@ -166,31 +160,6 @@ export const SEED_HABITS: Habit[] = [
   { id: "h4", label: "Reading", icon: BookOpen, color: "teal" },
   { id: "h5", label: "No screen before bed", icon: MonitorOff, color: "green" },
 ];
-
-/** One dated log per habit, for today. Still seeded/mock values — the fix
- *  here is that every value is now tied to a real date instead of floating
- *  with no period attached; deriving a genuinely earned percentage needs
- *  accumulated real history and real logging UI, which is Phase 7's job
- *  (PRODUCT_BLUEPRINT.md §12, §25). */
-export function createSeedHabitLogs(now: Date): HabitLog[] {
-  const today = startOfDay(now).toISOString().slice(0, 10);
-  return [
-    { id: "hl1", habitId: "h1", date: today, value: 82 },
-    { id: "hl2", habitId: "h2", date: today, value: 60 },
-    { id: "hl3", habitId: "h3", date: today, value: 45 },
-    { id: "hl4", habitId: "h4", date: today, value: 70 },
-    { id: "hl5", habitId: "h5", date: today, value: 55 },
-  ];
-}
-
-/** Look up a habit's logged value for the day represented by `logs`. `undefined`
- *  means "not logged" — render that honestly rather than defaulting to 0. */
-export function getHabitLogValue(
-  logs: HabitLog[],
-  habitId: string
-): number | undefined {
-  return logs.find((log) => log.habitId === habitId)?.value;
-}
 
 export const AI_QUICK_ACTIONS: string[] = [
   "Plan my week",

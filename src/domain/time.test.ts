@@ -14,6 +14,7 @@ import {
   sortByIsoDate,
   startOfDay,
   startOfWeek,
+  toIsoDateLocal,
 } from "./time";
 
 // A fixed reference instant — every test passes `now` explicitly (the
@@ -45,6 +46,20 @@ describe("startOfDay / endOfDay / isSameDay", () => {
 
   it("isSameDay is false across a day boundary", () => {
     expect(isSameDay(new Date(2026, 8, 4, 23, 59), new Date(2026, 8, 5, 0, 1))).toBe(false);
+  });
+});
+
+describe("toIsoDateLocal", () => {
+  it("formats the local calendar date, zero-padded", () => {
+    expect(toIsoDateLocal(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
+  });
+
+  it("does not shift to a different day the way a UTC-based slice would", () => {
+    // A late-evening local time whose UTC equivalent falls on the next
+    // calendar day in negative-UTC-offset zones — Date.toISOString().slice
+    // would get this wrong depending on the runtime's offset; this must not.
+    const d = new Date(2026, 8, 4, 23, 30);
+    expect(toIsoDateLocal(d)).toBe("2026-09-04");
   });
 });
 

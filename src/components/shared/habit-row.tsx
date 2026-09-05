@@ -1,23 +1,31 @@
 import { cn } from "@/lib/utils";
-import { ACCENT_CHIP_CLASSES, ACCENT_SOLID_CLASSES } from "@/lib/colors";
-import { Progress } from "@/components/ui/progress";
+import { ACCENT_CHIP_CLASSES } from "@/lib/colors";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Habit } from "@/domain/types";
 
+/**
+ * A habit is now logged, not measured — see `domain/types.HabitLog`. There
+ * is no meaningful progress bar for a plain done/not-done fact (a bar that
+ * only ever shows 0% or 100% is stranger than a checkbox, and anything
+ * between would be invented), so this mirrors the same checkbox pattern
+ * already used for tasks rather than inventing a new interaction.
+ */
 function HabitRow({
   habit,
-  value,
+  completed,
+  onToggle,
   className,
 }: {
   habit: Habit;
-  /** Today's logged value, 0-100. `undefined` means "not logged today" —
-   *  shown honestly rather than defaulting to 0. */
-  value: number | undefined;
+  completed: boolean;
+  onToggle: () => void;
   className?: string;
 }) {
   const Icon = habit.icon;
 
   return (
-    <div className={cn("flex items-center gap-3", className)}>
+    <label className={cn("flex cursor-pointer items-center gap-3", className)}>
+      <Checkbox checked={completed} onCheckedChange={onToggle} />
       <span
         className={cn(
           "flex size-8 shrink-0 items-center justify-center rounded-[10px]",
@@ -26,20 +34,20 @@ function HabitRow({
       >
         <Icon className="size-4" strokeWidth={2} />
       </span>
-      <div className="flex flex-1 flex-col gap-1.5">
-        <div className="flex items-center justify-between text-body">
-          <span className="text-foreground">{habit.label}</span>
-          <span className="text-muted-foreground">
-            {value != null ? `${value}%` : "Not logged today"}
-          </span>
-        </div>
-        <Progress
-          value={value ?? 0}
-          className="h-1.5"
-          indicatorClassName={ACCENT_SOLID_CLASSES[habit.color]}
-        />
+      <div className="flex flex-1 items-center justify-between text-body">
+        <span
+          className={cn(
+            "text-foreground",
+            completed && "text-muted-foreground line-through"
+          )}
+        >
+          {habit.label}
+        </span>
+        <span className="text-caption text-muted-foreground">
+          {completed ? "Logged today" : "Not logged"}
+        </span>
       </div>
-    </div>
+    </label>
   );
 }
 
