@@ -6,6 +6,7 @@ import {
   sessionsOnDay,
   totalFocusedMinutes,
   weeklyActivity,
+  weeklyCompletionGrid,
 } from "./metrics";
 import type { HabitLog, StudySession } from "./types";
 
@@ -119,5 +120,31 @@ describe("habitStreak", () => {
   it("ignores logs for a different habit", () => {
     const logs = [log("other", "2026-09-04"), log("other", "2026-09-03")];
     expect(habitStreak(logs, "h1", NOW)).toBe(0);
+  });
+});
+
+describe("weeklyCompletionGrid", () => {
+  function log(habitId: string, date: string): HabitLog {
+    return { id: `${habitId}-${date}`, habitId, date };
+  }
+
+  it("returns 7 days, Monday first, all false with no logs", () => {
+    const grid = weeklyCompletionGrid([], "h1", NOW);
+    expect(grid).toHaveLength(7);
+    expect(grid.every((d) => !d.completed)).toBe(true);
+    expect(grid[0].date.getDay()).toBe(1); // Monday
+    expect(grid[6].date.getDay()).toBe(0); // Sunday
+  });
+
+  it("marks exactly the logged days, in order", () => {
+    const logs = [log("h1", "2026-08-31"), log("h1", "2026-09-02"), log("h1", "2026-09-04")];
+    const grid = weeklyCompletionGrid(logs, "h1", NOW);
+    expect(grid.map((d) => d.completed)).toEqual([true, false, true, false, true, false, false]);
+  });
+
+  it("ignores logs for a different habit or a different week", () => {
+    const logs = [log("other", "2026-09-02"), log("h1", "2026-09-07")]; // next week
+    const grid = weeklyCompletionGrid(logs, "h1", NOW);
+    expect(grid.every((d) => !d.completed)).toBe(true);
   });
 });

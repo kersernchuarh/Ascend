@@ -9,20 +9,22 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { AI_QUICK_ACTIONS } from "@/data/dashboard";
+import { AI_FUTURE_ACTIONS } from "@/data/dashboard";
 
+/** Mobile's equivalent of the desktop AiPreviewCard — same fix, same
+ *  reasoning: a text input with nowhere for it to go was worse than no
+ *  input at all, so it's gone. These four stay as disabled, honestly
+ *  labeled product concepts. */
 function FloatingAiButton() {
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Ask Ascend"
+        aria-label="AI planning — coming soon"
         className="fixed bottom-[80px] right-4 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-soft-lg transition-transform duration-150 active:scale-95 md:hidden"
       >
         <Sparkles className="size-6" strokeWidth={2} />
@@ -31,26 +33,21 @@ function FloatingAiButton() {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="rounded-t-card border-border">
           <SheetHeader>
-            <SheetTitle>Ask Ascend</SheetTitle>
+            <SheetTitle>AI planning</SheetTitle>
             <SheetDescription>
-              Your AI coach for academics, health, and everything in between.
+              Coming soon — not yet connected to your tasks and habits.
             </SheetDescription>
           </SheetHeader>
           <div className="flex flex-col gap-4 px-4 pb-6">
-            <Input
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              placeholder="Ask Ascend anything..."
-              className="h-11"
-            />
             <div className="flex flex-wrap gap-2">
-              {AI_QUICK_ACTIONS.map((action) => (
+              {AI_FUTURE_ACTIONS.map((action) => (
                 <Button
                   key={action}
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => setValue(action)}
+                  disabled
+                  className="opacity-60"
                 >
                   {action}
                 </Button>

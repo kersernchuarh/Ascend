@@ -252,7 +252,11 @@ Only sections whose data is real should appear in the nav. Until a section's dat
 - The topbar search button renders a `⌘K` hint and has **no handler**. A visible keyboard hint that does nothing is a false affordance and it teaches the user that the app's controls are decorative. Either implement it or remove the hint.
 - The notification bell has **no handler** and a permanent unread dot. Same problem; remove until notifications exist.
 
-**Floating AI button (mobile)** — repurpose from "chat" to **quick capture**, which is the genuinely useful one-handed mobile action.
+**Status:** both fixed in Phase 2 — removed rather than implemented (no command palette or notifications exist to back them yet), and the topbar avatar now links to Settings, a real destination, instead of just looking clickable. This also fixed the app's duplicate-`h1` bug at its root: the topbar's route title is now every page's one `<h1>`; page-level content uses `<h2>` or lower.
+
+**Floating AI button (mobile)** — repurpose from "chat" to **quick capture**, which is the genuinely useful one-handed mobile action. *Status:* not yet — still a disabled "coming soon" surface (§14), matching desktop's `AiPreviewCard`; quick capture needs the NL-parsing capability in §19, which is gated on later phases.
+
+**`/focus` — a route, not a nav item.** A dedicated Focus Session experience (Phase 2) reached via links from Today's Focus rows and the Home "Now" panel, deliberately not added to the sidebar or bottom nav — a permanent nav entry for it would be a bigger navigation-model change than was asked for when it shipped. Revisit if usage shows people want to reach it without a task already in hand.
 
 ---
 
@@ -323,6 +327,22 @@ A single explainable insight *if and only if* one can be computed from real data
 
 **Mobile composition:** Now → Habits due → Timeline (condensed) → Risk strip → week summary. Logging actions rise; planning affordances fall away.
 
+### 9.3 Phase 2 Home implementation record
+
+§9.2 above was written before Sessions, persistence, or a free-time engine existed, and describes a timeline/risk-strip/now-line design that assumes all three. What actually shipped this pass is a narrower, honest version of the same intent — direct product instructions superseded the speculative design where they conflicted, per this phase's own framing ("treat the blueprint as source of truth, but use the following priorities as explicit product direction"). Documented here rather than silently reconciled into §9.2, since the underlying interaction model is a real product decision, not a copy-edit.
+
+**What shipped, top to bottom:** a **Now panel** (greeting demoted to a caption; the next incomplete task is the dominant element, `text-display`, with a *Start Focus Session* link) → **Today's Focus**, now genuinely interactive (add/remove/reorder/complete, due/estimate metadata, per-row session start) at real visual width (`xl:col-span-2` of 3, not an equal third) → **Upcoming** → a **Today's Progress** strip (tasks done, minutes focused, habits logged — three real numbers, no trend, replacing the Weekly Balance donut entirely) → **Habit Tracker** (7-day grid + streak, no cadence — see §12) → an **AI planning** card, disabled buttons naming real future capabilities, last and visually quiet.
+
+**Not built this pass, and why:** the deadline **risk strip** and **live timeline** from §9.2 need the free-time engine (§16, Phase 5) to mean anything beyond what Upcoming's existing `deadlineRisk` chips already show — building a visual timeline over data that can't yet compute "free time" would be exactly the false precision this phase's integrity rule prohibits. §9.2 remains the target once Sessions have real volume and Plan/free-time exist; nothing here forecloses it.
+
+**Real decisions made while building this:**
+- **Task reordering swaps array position, not a new `order` field.** `todayTasks` is already a filtered, order-preserving view over `tasks`; moving a task up/down within that view resolves to swapping two specific tasks' positions in the underlying array. No schema change, and no new value to keep in sync with anything else.
+- **"Remove from today" unschedules (clears `scheduledFor`), it does not delete.** The task persists; it just stops appearing in `todayTasks` until re-scheduled. There is no backlog view yet to see it land in — a real, disclosed limitation of the action today, not a reason to make it destructive instead.
+- **Reordering is up/down buttons, not drag-and-drop.** Drag has no accessible keyboard equivalent without building one in parallel; buttons are simpler, fully keyboard-operable by construction, and need no new dependency.
+- **A shared `TaskRow` (and `HabitRow`) is used by both the desktop and mobile trees**, and mobile's dashboard now composes the *same* cards as desktop (`NowPanel`, `TodaysFocusCard`, `UpcomingCard`, `TodayProgressStrip`, `HabitTrackerCard`, `AiPreviewCard`) in its own order, plus one mobile-only `WeekStripCard`. This is a deliberate revision of the "separate component trees" framing in §17/§24: the *composition* stays mobile's own decision (order, and what mobile-only content like the week strip to add), but duplicating a second implementation of interactive task/habit rows was a maintenance and parity risk once those rows became genuinely interactive, not a legitimate desktop/mobile difference. §21's responsive-bias guidance (mobile leans toward logging/capture) is achieved through card *order*, not through withholding capability mobile users would reasonably expect.
+- **Focus Session is a real route (`/focus`), not a nav item.** Reached via links from Today's Focus rows and the Now panel; adding a permanent nav entry for it was a bigger navigation-model change than this phase called for.
+- **`StudySession.outcome`'s "stored, not derived" design (§18.1) held under a second, independent test** — the reset-and-confirm flow on `/focus` calls the identical `finalizeSession` logic the old Study Timer card used, and a live abandoned-session test showed wall-clock drift again pushing `actualEnd` past `plannedEnd` while the explicit stored `outcome` stayed correct regardless. Confirms §18.1's fix generalizes, rather than having been a one-off patch.
+
 ---
 
 ## 10. Tasks specification (`Work`)
@@ -380,6 +400,8 @@ A single explainable insight *if and only if* one can be computed from real data
 **Must NOT contain:** streak-shaming or loss-framing (principle 8); one-off tasks; habits invented by the app.
 
 **Model correction:** replace `HabitEntry.value: number` (a computed percentage stored as data) with definition + dated logs. Adherence, streaks and percentages become derivations. Also drop the seeded five-habit list for new users — habits the user didn't choose are noise; ship 3–4 *suggestions* during onboarding instead.
+
+**Status:** the model correction above shipped in Phase 2 (`HabitLog` is presence-based: `{id, habitId, date}`), and a Home summary now shows a real 7-day completion grid plus streak (§9.3, §18.1). Cadence/target — the part of this spec that makes genuine *adherence* computable — deliberately has not: nothing lets a user set one yet, and assuming an implicit default (e.g. "daily") would silently assert a target they never chose. The 7-day grid answers "what days did I miss" without needing one; a dedicated Habits page is still not built.
 
 ---
 

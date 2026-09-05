@@ -48,6 +48,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   "/ai": "AI Coach",
   "/settings": "Settings",
   "/more": "More",
+  "/focus": "Focus Session",
 };
 
 export const MOCK_USER = {
