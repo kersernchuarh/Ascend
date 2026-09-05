@@ -5,22 +5,33 @@ import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { PillBadge } from "@/components/shared/pill-badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/format-date";
 import { PILLARS } from "@/lib/pillars";
 import { useTasks } from "@/state/task-context";
 
 function TodaysFocusCard() {
-  const { todayTasks: tasks, completedCount, toggleTask } = useTasks();
+  const { todayTasks: tasks, completedCount, toggleTask, status } = useTasks();
 
   return (
     <Card className="w-full">
       <CardContent>
         <SectionHeader
           title="Today's Focus"
-          description={`${completedCount}/${tasks.length} completed`}
+          description={status === "ready" ? `${completedCount}/${tasks.length} completed` : undefined}
         />
-        {tasks.length === 0 ? (
+        {status === "loading" ? (
+          // Distinct from the empty state below: a returning user with real
+          // tasks would otherwise see "Nothing on your plate today" flash
+          // for a moment while storage loads — a misleading default, not
+          // just an unstyled one.
+          <div className="mt-4 flex flex-col gap-3" aria-hidden="true">
+            <Skeleton className="h-14 w-full rounded-[10px]" />
+            <Skeleton className="h-14 w-full rounded-[10px]" />
+            <Skeleton className="h-14 w-full rounded-[10px]" />
+          </div>
+        ) : tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
             <ClipboardCheck className="size-6 text-muted-foreground" strokeWidth={1.5} />
             <p className="text-body text-muted-foreground">

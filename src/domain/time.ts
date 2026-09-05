@@ -35,6 +35,18 @@ export function endOfDay(date: Date): Date {
   return d;
 }
 
+/** `YYYY-MM-DD` for the LOCAL calendar day `date` falls on. Deliberately
+ *  not `date.toISOString().slice(0, 10)` — that normalizes to UTC, which
+ *  silently shifts to the wrong calendar day for part of the evening in any
+ *  positive-UTC-offset zone (Singapore included, this product's own primary
+ *  market). Phase 1's seed habit data had exactly this bug. */
+export function toIsoDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /** Whether `a` and `b` fall on the same calendar day, local time. */
 export function isSameDay(a: Date, b: Date): boolean {
   return (

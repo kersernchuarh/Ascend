@@ -1,27 +1,35 @@
 "use client";
 
-import { useMemo } from "react";
 import { Repeat } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { HabitRow } from "@/components/shared/habit-row";
-import { SEED_HABITS, createSeedHabitLogs, getHabitLogValue } from "@/data/dashboard";
-import { useNow } from "@/domain/use-now";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SEED_HABITS } from "@/data/dashboard";
+import { useHabits } from "@/state/habit-context";
 
 function HabitTrackerCard() {
-  const now = useNow();
-  // Habit *definitions* have no time dependency; only today's logged values
-  // do, so only the logs wait on a real client "now" (see `useNow`).
-  const logs = useMemo(() => (now ? createSeedHabitLogs(now) : []), [now]);
+  const { isCompletedToday, toggleHabitToday, status } = useHabits();
+  const loggedCount = SEED_HABITS.filter((habit) => isCompletedToday(habit.id)).length;
 
   return (
     <Card className="w-full">
       <CardContent className="flex flex-col gap-4">
         <SectionHeader
           title="Habit Tracker"
-          description="Today's consistency across your routines"
+          description={
+            status === "ready"
+              ? `${loggedCount}/${SEED_HABITS.length} logged today`
+              : undefined
+          }
         />
-        {SEED_HABITS.length === 0 ? (
+        {status === "loading" ? (
+          <div className="flex flex-col gap-6" aria-hidden="true">
+            <Skeleton className="h-8 w-full rounded-[10px]" />
+            <Skeleton className="h-8 w-full rounded-[10px]" />
+            <Skeleton className="h-8 w-full rounded-[10px]" />
+          </div>
+        ) : SEED_HABITS.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
             <Repeat className="size-6 text-muted-foreground" strokeWidth={1.5} />
             <p className="text-body text-muted-foreground">No habits tracked yet</p>
@@ -32,7 +40,8 @@ function HabitTrackerCard() {
               <HabitRow
                 key={habit.id}
                 habit={habit}
-                value={getHabitLogValue(logs, habit.id)}
+                completed={isCompletedToday(habit.id)}
+                onToggle={() => toggleHabitToday(habit.id)}
               />
             ))}
           </div>

@@ -5,13 +5,9 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { Scale, Sparkles, ChevronRight } from "lucide-react";
 import { MOCK_USER } from "@/data/mock";
-import {
-  SEED_HABITS,
-  createSeedHabitLogs,
-  getHabitLogValue,
-  createSeedCalendarEvents,
-} from "@/data/dashboard";
+import { SEED_HABITS, createSeedCalendarEvents } from "@/data/dashboard";
 import { useTasks } from "@/state/task-context";
+import { useHabits } from "@/state/habit-context";
 import { useNow } from "@/domain/use-now";
 import { addDays, isSameDay, startOfWeek } from "@/domain/time";
 import { formatWeekdayShort } from "@/lib/format-date";
@@ -21,6 +17,7 @@ import { HabitRow } from "@/components/shared/habit-row";
 import { SectionHeader } from "@/components/shared/section-header";
 import { Card, CardContent } from "@/components/shared/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 function getGreeting(hour: number) {
@@ -32,7 +29,8 @@ function getGreeting(hour: number) {
 function MobileDashboard() {
   const prefersReducedMotion = useReducedMotion();
   const [greeting, setGreeting] = React.useState("Good day");
-  const { todayTasks, toggleTask } = useTasks();
+  const { todayTasks, toggleTask, status: taskStatus } = useTasks();
+  const { isCompletedToday, toggleHabitToday } = useHabits();
   const now = useNow();
   // Mobile shows a short preview of today rather than the full list; the tasks
   // themselves come from the shared store, so toggling here and on desktop
@@ -46,12 +44,6 @@ function MobileDashboard() {
     setGreeting(getGreeting(new Date().getHours()));
   }, []);
 
-  // Habit *definitions* have no time dependency; only today's logged values
-  // do, so only the logs wait on a real client "now" (see `useNow`).
-  const habitLogs = React.useMemo(
-    () => (now ? createSeedHabitLogs(now) : []),
-    [now]
-  );
   const previewHabits = SEED_HABITS.slice(0, 3);
 
   // Real days of the actual current week, with real per-day event counts —
@@ -101,34 +93,41 @@ function MobileDashboard() {
       <Card className="w-full">
         <CardContent className="flex flex-col gap-4">
           <SectionHeader title="Today" />
-          <div className="flex flex-col">
-            {tasks.map((task) => {
-              const pillar = PILLARS[task.pillar];
-              return (
-                <label
-                  key={task.id}
-                  className="flex min-h-12 cursor-pointer items-center gap-3 rounded-[10px] px-1 transition-colors hover:bg-surface-2"
-                >
-                  <Checkbox
-                    checked={!!task.completedAt}
-                    onCheckedChange={() => toggleTask(task.id)}
-                    className="size-5"
-                  />
-                  <span
-                    className={cn("size-1.5 shrink-0 rounded-full", ACCENT_SOLID_CLASSES[pillar.color])}
-                  />
-                  <span
-                    className={cn(
-                      "flex-1 text-body text-foreground",
-                      task.completedAt && "text-muted-foreground line-through"
-                    )}
+          {taskStatus === "loading" ? (
+            <div className="flex flex-col gap-2" aria-hidden="true">
+              <Skeleton className="h-12 w-full rounded-[10px]" />
+              <Skeleton className="h-12 w-full rounded-[10px]" />
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {tasks.map((task) => {
+                const pillar = PILLARS[task.pillar];
+                return (
+                  <label
+                    key={task.id}
+                    className="flex min-h-12 cursor-pointer items-center gap-3 rounded-[10px] px-1 transition-colors hover:bg-surface-2"
                   >
-                    {task.title}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
+                    <Checkbox
+                      checked={!!task.completedAt}
+                      onCheckedChange={() => toggleTask(task.id)}
+                      className="size-5"
+                    />
+                    <span
+                      className={cn("size-1.5 shrink-0 rounded-full", ACCENT_SOLID_CLASSES[pillar.color])}
+                    />
+                    <span
+                      className={cn(
+                        "flex-1 text-body text-foreground",
+                        task.completedAt && "text-muted-foreground line-through"
+                      )}
+                    >
+                      {task.title}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -186,7 +185,8 @@ function MobileDashboard() {
               <HabitRow
                 key={habit.id}
                 habit={habit}
-                value={getHabitLogValue(habitLogs, habit.id)}
+                completed={isCompletedToday(habit.id)}
+                onToggle={() => toggleHabitToday(habit.id)}
               />
             ))}
           </div>

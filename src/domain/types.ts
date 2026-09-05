@@ -82,20 +82,43 @@ export type CalendarEvent = {
 };
 
 /**
- * A block of focused work. Modeled now so the shape exists and is tested,
- * but deliberately NOT wired to the Study Timer yet: without persistence
- * (Phase 2) there is nowhere honest to keep a log, and binding the timer to
- * an entity that vanishes on reload would be its own kind of fabrication.
- * Phase 3 ("Sessions: the atomic unit") is where this becomes real.
+ * A block of focused work — a persisted, immutable record of something the
+ * user actually did. Phase 1 modeled this shape but deliberately left every
+ * field optional and wired it to nothing, since without persistence there
+ * was nowhere honest to keep a log. Now that Phase 2 adds real storage, the
+ * fields are required: a `StudySession` is only ever created once it has
+ * actually ended, so every timestamp is always known by construction — a
+ * "currently running" session is *not* modeled as a `StudySession` at all,
+ * it's ordinary ephemeral component state until it finishes.
  */
 export type StudySession = {
   id: string;
+  /** Optional association with the task being worked on — "when available"
+   *  per the product's own framing; plenty of real focus time has no task
+   *  attached. */
   taskId?: string;
   deadlineId?: string;
-  plannedStart?: string;
-  plannedEnd?: string;
-  actualStart?: string;
-  actualEnd?: string;
+  /** When the session was intended to start — equal to `actualStart` in the
+   *  current timer, which has no "schedule for later" concept yet. */
+  plannedStart: string;
+  /** `plannedStart` + the configured session length. Kept for display
+   *  ("planned vs actual") — NOT used to derive `outcome`; see below. */
+  plannedEnd: string;
+  actualStart: string;
+  actualEnd: string;
+  /**
+   * Whether the countdown was actually observed reaching zero, or the user
+   * stopped it first. Deliberately stored rather than derived by comparing
+   * `actualEnd` to `plannedEnd` — an earlier version of this type did
+   * exactly that, and live browser testing caught the real bug in it: if
+   * the tab is backgrounded, throttled, or the system sleeps mid-session,
+   * real wall-clock time can drift past the planned duration even though
+   * the countdown the user actually watched never reached zero. Only the
+   * running timer knows which happened, at the moment it happens — that's
+   * not reconstructable from timestamps afterward, so it's captured
+   * directly by whichever code path calls `recordSession`.
+   */
+  outcome: "completed" | "abandoned";
 };
 
 /** A recurring behaviour the user tracks. Owns no statistic — see `HabitLog`. */
@@ -106,17 +129,26 @@ export type Habit = {
   color: AccentColor;
 };
 
-/** A dated observation for a habit. Replaces the old `HabitEntry.value`,
- *  which was a bare percentage with no period attached — a number with no
- *  date is unfalsifiable. This ties every value to a specific day; it does
- *  not yet compute streaks, cadence or trends across days, which need
- *  accumulated real history and are Phase 7's job (blueprint §12). */
+/**
+ * A record that a habit was actually completed on a given day. Presence is
+ * the whole fact: there is no `completed: false` row, because "the user
+ * hasn't logged this yet" and "the user explicitly marked it not done" are
+ * indistinguishable in practice and modeling both would only invite a
+ * `completed` field that's always `true` to fall out of sync with nothing.
+ * Un-logging a day removes its record entirely (`state/habit-context.tsx`).
+ *
+ * Replaces Phase 1's `HabitEntry.value: number` (a bare 0-100 percentage
+ * with no real record behind it) entirely — streaks, adherence and any
+ * future rate all derive from these logs (`domain/metrics.ts`), never
+ * stored directly.
+ */
 export type HabitLog = {
   id: string;
   habitId: string;
-  /** ISO date (no time) this observation is for. */
+  /** Local calendar date, `YYYY-MM-DD`, no time — see
+   *  `domain/time.toIsoDateLocal`. Deliberately not derived via
+   *  `Date.toISOString()`, which normalizes to UTC and silently shifts to
+   *  the wrong calendar day for part of the evening in positive-UTC-offset
+   *  zones (Singapore included) — exactly the bug Phase 1's seed data had. */
   date: string;
-  /** 0-100. Still a seeded/mock value in Phase 1 — the fix here is temporal
-   *  honesty (every value is now dated), not that the number is "real". */
-  value: number;
 };
