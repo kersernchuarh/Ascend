@@ -1,10 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Search } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MOCK_USER, ROUTE_TITLES } from "@/data/mock";
 
+/**
+ * The route title here is every page's ONE `<h1>` — page-level content
+ * (the old `Hero` greeting, `ComingSoon`'s heading) uses `<h2>` or lower.
+ * Search and notifications were removed rather than fixed: both rendered
+ * with no handler at all — a keyboard-focusable, visually "live" control
+ * that does nothing is worse than no control, and neither is being built
+ * this phase. The avatar now links to Settings, a real destination,
+ * instead of just looking clickable.
+ */
 function Topbar() {
   const pathname = usePathname();
   const title = ROUTE_TITLES[pathname];
@@ -17,33 +26,17 @@ function Topbar() {
         ) : null}
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          className="flex h-9 w-64 items-center gap-2 rounded-input border border-border bg-surface-2 px-3 text-body text-muted-foreground transition-colors duration-150 hover:border-[#2a3441] hover:text-foreground"
-        >
-          <Search className="size-4 shrink-0" strokeWidth={2} />
-          <span className="flex-1 truncate text-left">Search Ascend...</span>
-          <kbd className="rounded-[6px] border border-border bg-surface px-1.5 py-0.5 text-caption text-muted-foreground">
-            ⌘K
-          </kbd>
-        </button>
-
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative flex size-9 shrink-0 items-center justify-center rounded-button text-muted-foreground transition-colors duration-150 hover:bg-surface-2 hover:text-foreground"
-        >
-          <Bell className="size-[18px]" strokeWidth={2} />
-          <span className="absolute right-2 top-2 size-1.5 rounded-full bg-primary" />
-        </button>
-
+      <Link
+        href="/settings"
+        aria-label={`${MOCK_USER.name}'s account settings`}
+        className="rounded-full focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
         <Avatar className="size-8 cursor-pointer">
           <AvatarFallback className="bg-primary/15 text-primary text-caption font-semibold">
             {MOCK_USER.initials}
           </AvatarFallback>
         </Avatar>
-      </div>
+      </Link>
     </header>
   );
 }

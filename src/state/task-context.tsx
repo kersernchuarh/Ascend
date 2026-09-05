@@ -38,10 +38,24 @@ type TaskContextValue = {
   status: "loading" | "ready";
   toggleTask: (id: string) => void;
   updateTask: (id: string, changes: TaskChanges) => void;
-  /** Creates a new task with a generated `id`/`createdAt`. No UI calls this
-   *  yet — a dedicated create surface is Work/Tasks-page territory (Phase
-   *  4) — but the capability exists and is persisted like everything else. */
+  /** Creates a new task with a generated `id`/`createdAt`. Used by Home's
+   *  quick-add — full create/edit UI is still Work/Tasks-page territory
+   *  (Phase 4), but this capability is real and persisted like everything
+   *  else, not a stub. */
   addTask: (input: Omit<Task, "id" | "createdAt">) => void;
+  /** Moves a task up/down relative to its neighbors *within `todayTasks`* —
+   *  implemented as swapping the two tasks' positions in the underlying
+   *  `tasks` array (every other task's relative order is untouched), rather
+   *  than adding an `order` field: array position already fully determines
+   *  render order, so a new field would just be something else to keep in
+   *  sync. */
+  moveTaskInToday: (id: string, direction: "up" | "down") => void;
+  /** Unschedules a task from today (clears `scheduledFor`) rather than
+   *  deleting it — "remove from today's focus" means it stops being today's
+   *  problem, not that it ceases to exist. There is no backlog view yet to
+   *  see it land in (that's Phase 4), which is a real, disclosed limitation
+   *  of this action for now, not a reason to make it destructive instead. */
+  removeFromToday: (id: string) => void;
 };
 
 const TaskContext = createContext<TaskContextValue | null>(null);
@@ -122,6 +136,34 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     setTasks((prev) => [...prev, task]);
   }, []);
 
+  const moveTaskInToday = useCallback(
+    (id: string, direction: "up" | "down") => {
+      setTasks((prev) => {
+        if (!now) return prev;
+        const todayIds = prev
+          .filter((task) => task.scheduledFor && isDueToday(task.scheduledFor, now))
+          .map((task) => task.id);
+        const idx = todayIds.indexOf(id);
+        if (idx === -1) return prev;
+        const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= todayIds.length) return prev;
+        const otherId = todayIds[swapIdx];
+        const aIndex = prev.findIndex((task) => task.id === id);
+        const bIndex = prev.findIndex((task) => task.id === otherId);
+        const next = [...prev];
+        [next[aIndex], next[bIndex]] = [next[bIndex], next[aIndex]];
+        return next;
+      });
+    },
+    [now]
+  );
+
+  const removeFromToday = useCallback((id: string) => {
+    setTasks((prev) =>
+      prev.map((task) => (task.id === id ? { ...task, scheduledFor: undefined } : task))
+    );
+  }, []);
+
   const todayTasks = useMemo(() => {
     if (!now) return [];
     return tasks.filter((task) => task.scheduledFor && isDueToday(task.scheduledFor, now));
@@ -136,8 +178,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       toggleTask,
       updateTask,
       addTask,
+      moveTaskInToday,
+      removeFromToday,
     }),
-    [tasks, todayTasks, status, toggleTask, updateTask, addTask]
+    [tasks, todayTasks, status, toggleTask, updateTask, addTask, moveTaskInToday, removeFromToday]
   );
 
   return <TaskContext.Provider value={value}>{children}</TaskContext.Provider>;

@@ -43,6 +43,7 @@ export function createSeedTasks(now: Date): Task[] {
       createdAt: atDaysFromNow(now, -1, 18, 0),
       scheduledFor: atToday(now, 9, 0),
       completedAt: atToday(now, 9, 15),
+      estimateMinutes: 45,
     },
     {
       id: "t2",
@@ -51,6 +52,7 @@ export function createSeedTasks(now: Date): Task[] {
       createdAt: atDaysFromNow(now, -1, 18, 0),
       scheduledFor: atToday(now, 8, 30),
       completedAt: atToday(now, 8, 40),
+      estimateMinutes: 10,
     },
     {
       id: "t3",
@@ -58,6 +60,7 @@ export function createSeedTasks(now: Date): Task[] {
       pillar: "health",
       createdAt: atDaysFromNow(now, -1, 18, 0),
       scheduledFor: atToday(now, 17, 30),
+      estimateMinutes: 30,
     },
     {
       id: "t4",
@@ -65,8 +68,12 @@ export function createSeedTasks(now: Date): Task[] {
       pillar: "academics",
       createdAt: atDaysFromNow(now, -1, 18, 0),
       scheduledFor: atToday(now, 19, 0),
+      estimateMinutes: 20,
     },
     {
+      // Deliberately no estimateMinutes — a phone call doesn't really have
+      // one, and every seed task having an estimate would never exercise
+      // the "no estimate" state a real user's own tasks will regularly hit.
       id: "t5",
       title: "Call mom",
       pillar: "life",
@@ -161,11 +168,13 @@ export const SEED_HABITS: Habit[] = [
   { id: "h5", label: "No screen before bed", icon: MonitorOff, color: "green" },
 ];
 
-export const AI_QUICK_ACTIONS: string[] = [
-  "Plan my week",
-  "Generate revision timetable",
-  "Summarize homework",
-  "How can I improve?",
+/** Product concepts, not working actions — see AiPreviewCard/FloatingAiButton.
+ *  Shared so the desktop and mobile "coming soon" surfaces stay in sync. */
+export const AI_FUTURE_ACTIONS: string[] = [
+  "Plan my day",
+  "Plan my afternoon",
+  "What should I do next?",
+  "Review my week",
 ];
 
 export const STUDY_SESSION_SECONDS = 45 * 60;

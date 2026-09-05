@@ -15,7 +15,7 @@ function ComingSoon({ icon: Icon, title, description }: ComingSoonProps) {
         <Icon className="size-6" strokeWidth={2} />
       </span>
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-h2 text-foreground">{title}</h1>
+        <h2 className="text-h2 text-foreground">{title}</h2>
         <p className="max-w-sm text-body text-muted-foreground">{description}</p>
       </div>
       <Button asChild variant="outline" className="mt-2">

@@ -146,20 +146,30 @@ Without this, "Chemistry lab report" is an unstructured string and the app can n
 `id, title, pillarId, deliverableId?, subjectId?, dueAt?: ISO datetime, scheduledFor?: ISO date, estimateMinutes?, status: 'todo'|'done', createdAt, completedAt?`
 Note `completedAt` — the current model has `done: boolean`, which discards *when*, making completion history impossible.
 
+> **As implemented (Phase 1, `src/domain/types.ts`):** `{id, title, pillar, createdAt, completedAt?, scheduledFor?, estimateMinutes?, deadlineId?}`. No `status` field — folded into `completedAt` presence, since a second field could disagree with the timestamp it's meant to describe. No `dueAt`, `priority`, `description`, or `subjectId`/`projectId` — none has a consumer anywhere in the app; each was evaluated and explicitly rejected rather than silently skipped (re-confirmed again in Phase 2, same conclusion). No `weight` — that's `Deliverable`'s job once it exists.
+
 **`Session`** — a block of focused work. **The atomic unit of value.** *New; the most important addition in this document.*
 `id, taskId?, deliverableId?, plannedStart?, plannedEnd?, actualStart?, actualEnd?, source: 'planned'|'manual'|'adhoc', interrupted: boolean, notes?`
 Planned-vs-actual on one record is what enables: adherence, estimate-drift correction, real "study hours this week", and every honest analytic in the product.
+
+> **As implemented (Phase 2, named `StudySession`):** `{id, taskId?, deadlineId?, plannedStart, plannedEnd, actualStart, actualEnd, outcome: 'completed'|'abandoned'}`. Fields are required, not optional — a `StudySession` is only ever created once it has actually ended (a "currently running" session is ordinary component state, not this type). `outcome` is **stored**, not derived from comparing `actualEnd`/`plannedEnd` as the "planned-vs-actual" framing above implies — live testing found that a backgrounded/throttled tab lets real wall-clock time drift past the planned duration even when the countdown the user watched never reached zero, so only the code path that actually observed completion can know which happened (§18.1). No `source`/`interrupted`/`notes` — nothing sets them yet.
 
 **`CalendarEvent`** — a fixed, non-negotiable commitment. *New.*
 `id, title, startAt, endAt, kind: 'class'|'cca'|'appointment'|'personal', pillarId?, recurrenceRule?`
 Ascend does not schedule these; it schedules *around* them. This entity is what makes free-time computation possible.
 
+> **As implemented (Phase 1):** `{id, title, startAt, endAt}` — no `kind`/`pillarId`/`recurrenceRule`; still seed-only (no CRUD UI exists), no consumer needs the rest yet.
+
 **`Habit`** — a recurring intention. *Replaces the definition half of `HabitEntry`.*
 `id, name, pillarId, cadence: {type:'daily'|'times_per_week', target:number}, unit?: 'count'|'minutes'|'hours', targetValue?, icon, color, archived`
+
+> **As implemented:** `{id, label, icon, color}` — no `cadence`/`target`/`pillarId`/`archived`. Deliberate, not an oversight: nothing in the product lets a user set a target yet, and assuming an implicit default (e.g. "daily") would silently assert a goal they never chose — worse than having no adherence metric at all (§9.3, §12).
 
 **`HabitLog`** — a dated observation. *New.*
 `id, habitId, date: ISO date, value: number|boolean, loggedAt`
 Streaks, adherence and the habit percentage are all derived from this. None are stored.
+
+> **As implemented:** `{id, habitId, date}` — presence-only, no `value`/`loggedAt`. A habit is logged or it isn't; there is no `completed: false` row, since "not logged yet" and "explicitly marked not done" are indistinguishable in practice and a boolean that's always `true` when present just invites drift. `date` is the local calendar date (`domain/time.toIsoDateLocal`), not a UTC-derived slice — see §18.1 for the bug that distinction fixes. `habitStreak` and `weeklyCompletionGrid` (§16) derive from this; a percentage/adherence figure is not implemented (needs `Habit.cadence`, which doesn't exist — see above).
 
 **`Pillar`** — fixed taxonomy. Owns no data; tags other entities. Provides identity colour and icon. Already well implemented in `src/lib/pillars.ts`.
 
@@ -252,7 +262,11 @@ Only sections whose data is real should appear in the nav. Until a section's dat
 - The topbar search button renders a `⌘K` hint and has **no handler**. A visible keyboard hint that does nothing is a false affordance and it teaches the user that the app's controls are decorative. Either implement it or remove the hint.
 - The notification bell has **no handler** and a permanent unread dot. Same problem; remove until notifications exist.
 
-**Floating AI button (mobile)** — repurpose from "chat" to **quick capture**, which is the genuinely useful one-handed mobile action.
+**Status:** both fixed in Phase 2 — removed rather than implemented (no command palette or notifications exist to back them yet), and the topbar avatar now links to Settings, a real destination, instead of just looking clickable. This also fixed the app's duplicate-`h1` bug at its root: the topbar's route title is now every page's one `<h1>`; page-level content uses `<h2>` or lower.
+
+**Floating AI button (mobile)** — repurpose from "chat" to **quick capture**, which is the genuinely useful one-handed mobile action. *Status:* not yet — still a disabled "coming soon" surface (§14), matching desktop's `AiPreviewCard`; quick capture needs the NL-parsing capability in §19, which is gated on later phases.
+
+**`/focus` — a route, not a nav item.** A dedicated Focus Session experience (Phase 2) reached via links from Today's Focus rows and the Home "Now" panel, deliberately not added to the sidebar or bottom nav — a permanent nav entry for it would be a bigger navigation-model change than was asked for when it shipped. Revisit if usage shows people want to reach it without a task already in hand.
 
 ---
 
@@ -323,6 +337,22 @@ A single explainable insight *if and only if* one can be computed from real data
 
 **Mobile composition:** Now → Habits due → Timeline (condensed) → Risk strip → week summary. Logging actions rise; planning affordances fall away.
 
+### 9.3 Phase 2 Home implementation record
+
+§9.2 above was written before Sessions, persistence, or a free-time engine existed, and describes a timeline/risk-strip/now-line design that assumes all three. What actually shipped this pass is a narrower, honest version of the same intent — direct product instructions superseded the speculative design where they conflicted, per this phase's own framing ("treat the blueprint as source of truth, but use the following priorities as explicit product direction"). Documented here rather than silently reconciled into §9.2, since the underlying interaction model is a real product decision, not a copy-edit.
+
+**What shipped, top to bottom:** a **Now panel** (greeting demoted to a caption; the next incomplete task is the dominant element, `text-display`, with a *Start Focus Session* link) → **Today's Focus**, now genuinely interactive (add/remove/reorder/complete, due/estimate metadata, per-row session start) at real visual width (`xl:col-span-2` of 3, not an equal third) → **Upcoming** → a **Today's Progress** strip (tasks done, minutes focused, habits logged — three real numbers, no trend, replacing the Weekly Balance donut entirely) → **Habit Tracker** (7-day grid + streak, no cadence — see §12) → an **AI planning** card, disabled buttons naming real future capabilities, last and visually quiet.
+
+**Not built this pass, and why:** the deadline **risk strip** and **live timeline** from §9.2 need the free-time engine (§16, Phase 5) to mean anything beyond what Upcoming's existing `deadlineRisk` chips already show — building a visual timeline over data that can't yet compute "free time" would be exactly the false precision this phase's integrity rule prohibits. §9.2 remains the target once Sessions have real volume and Plan/free-time exist; nothing here forecloses it.
+
+**Real decisions made while building this:**
+- **Task reordering swaps array position, not a new `order` field.** `todayTasks` is already a filtered, order-preserving view over `tasks`; moving a task up/down within that view resolves to swapping two specific tasks' positions in the underlying array. No schema change, and no new value to keep in sync with anything else.
+- **"Remove from today" unschedules (clears `scheduledFor`), it does not delete.** The task persists; it just stops appearing in `todayTasks` until re-scheduled. There is no backlog view yet to see it land in — a real, disclosed limitation of the action today, not a reason to make it destructive instead.
+- **Reordering is up/down buttons, not drag-and-drop.** Drag has no accessible keyboard equivalent without building one in parallel; buttons are simpler, fully keyboard-operable by construction, and need no new dependency.
+- **A shared `TaskRow` (and `HabitRow`) is used by both the desktop and mobile trees**, and mobile's dashboard now composes the *same* cards as desktop (`NowPanel`, `TodaysFocusCard`, `UpcomingCard`, `TodayProgressStrip`, `HabitTrackerCard`, `AiPreviewCard`) in its own order, plus one mobile-only `WeekStripCard`. This is a deliberate revision of the "separate component trees" framing in §17/§24: the *composition* stays mobile's own decision (order, and what mobile-only content like the week strip to add), but duplicating a second implementation of interactive task/habit rows was a maintenance and parity risk once those rows became genuinely interactive, not a legitimate desktop/mobile difference. §21's responsive-bias guidance (mobile leans toward logging/capture) is achieved through card *order*, not through withholding capability mobile users would reasonably expect.
+- **Focus Session is a real route (`/focus`), not a nav item.** Reached via links from Today's Focus rows and the Now panel; adding a permanent nav entry for it was a bigger navigation-model change than this phase called for.
+- **`StudySession.outcome`'s "stored, not derived" design (§18.1) held under a second, independent test** — the reset-and-confirm flow on `/focus` calls the identical `finalizeSession` logic the old Study Timer card used, and a live abandoned-session test showed wall-clock drift again pushing `actualEnd` past `plannedEnd` while the explicit stored `outcome` stayed correct regardless. Confirms §18.1's fix generalizes, rather than having been a one-off patch.
+
 ---
 
 ## 10. Tasks specification (`Work`)
@@ -381,6 +411,8 @@ A single explainable insight *if and only if* one can be computed from real data
 
 **Model correction:** replace `HabitEntry.value: number` (a computed percentage stored as data) with definition + dated logs. Adherence, streaks and percentages become derivations. Also drop the seeded five-habit list for new users — habits the user didn't choose are noise; ship 3–4 *suggestions* during onboarding instead.
 
+**Status:** the model correction above shipped in Phase 2 (`HabitLog` is presence-based: `{id, habitId, date}`), and a Home summary now shows a real 7-day completion grid plus streak (§9.3, §18.1). Cadence/target — the part of this spec that makes genuine *adherence* computable — deliberately has not: nothing lets a user set one yet, and assuming an implicit default (e.g. "daily") would silently assert a target they never chose. The 7-day grid answers "what days did I miss" without needing one; a dedicated Habits page is still not built.
+
 ---
 
 ## 13. Insights specification (`Progress`)
@@ -418,6 +450,8 @@ A single explainable insight *if and only if* one can be computed from real data
 Rationale: a chat tab requires the user to leave their work, describe context the app already has, and manually apply whatever comes back. Every one of the four retained functions is more useful *at the point of decision*. If a conversational surface is later justified by evidence, it should be a **panel** invoked over the current screen with that screen's context attached — never a destination.
 
 The four quick actions already in the code ("Plan my week", "Generate revision timetable", "Summarize homework", "How can I improve?") are a useful signal of intent: three of the four are **plan generation or review**, not conversation. That is the product telling you what its AI should be.
+
+**Status:** the "no destination" call shipped in Phase 2's Home redesign — there is no `/ai` surface in the primary hierarchy. `AiCommandBar` (a text input with a send button with no handler) and `AiInsightCard` (a redundant second empty state) are both deleted, replaced by one `AiPreviewCard`: four **disabled** buttons naming real future capabilities, with an honest "coming soon, not yet connected to your tasks and habits" caption. Mobile's `FloatingAiButton` got the identical fix (no free-text input, same disabled action set). The four actions themselves were revised to match direct product input received during that phase — **"Plan my day", "Plan my afternoon", "What should I do next?", "Review my week"** — replacing the original four above; all still concepts, none wired to anything.
 
 ---
 
@@ -460,6 +494,20 @@ Practical consequences of §6.3 for implementation.
 Every number visible in the UI should trace to exactly one entry in this table. Anything that cannot is a candidate for deletion.
 
 **Time handling:** store ISO 8601; treat "today" as a function of an **injectable clock** so derivations are testable and the UI can't drift. A `useNow(granularity)` hook drives the now-line and the live timer.
+
+**What's actually implemented (Phases 1-2), as distinct from the planned catalogue above** — all pure, unit-tested, no React:
+
+| Function | File | Note |
+| --- | --- | --- |
+| `isDueToday`, `isOverdue`, `daysUntilDue`, `remainingMinutes` | `domain/time.ts` | |
+| `deadlineRisk` | `domain/time.ts` | Time-proximity only — **not** the `risk(deliverable)` row above, which needs `freeTime` (unbuilt). Named differently on purpose so the two aren't mistaken for each other. |
+| `completionRate`, `scheduleConflict`, `sortByIsoDate` | `domain/time.ts` | `completionRate` has no consumer yet — built for §10/§13, ready when needed. |
+| `startOfDay`, `endOfDay`, `startOfWeek`, `isSameDay`, `addDays`, `addMinutes`, `toIsoDateLocal` | `domain/time.ts` | Calendar-day arithmetic; `toIsoDateLocal` exists specifically because a UTC-based date string is wrong for part of the evening in positive-UTC-offset zones (§18.1). |
+| `totalFocusedMinutes`, `sessionsOnDay`, `weeklyActivity` | `domain/metrics.ts` | Session-derived; `weeklyActivity` has no UI consumer yet (ready for Progress). |
+| `habitStreak`, `weeklyCompletionGrid` | `domain/metrics.ts` | Habit-derived; power Home's habit summary (§9.3). |
+| `isMeaningfulSessionDuration` | `domain/metrics.ts` | The ≥60s-real-effort misclick filter for recording a session at all. |
+
+Not implemented, and not planned until the row's own prerequisite exists: `freeTime`, `remainingEffort`, `risk(deliverable)`, `nextBestAction`, `adherence`, `estimateDrift`, `pillarBalance` — each needs Subjects/Deliverables, Sessions at volume, or a free-time engine that don't exist yet.
 
 ---
 
@@ -524,6 +572,8 @@ Versioning, corrupt-data handling and the SSR/hydration story shipped as specifi
 **Also corrected in passing:** Phase 1's seed habit data computed "today" via `date.toISOString().slice(0, 10)` — UTC, not local — which silently shifts to the wrong calendar day for part of the evening in any positive-UTC-offset zone (Singapore, this product's own stated primary market, included). Removing the fabricated seed data (below) also removed the bug; the replacement (`domain/time.toIsoDateLocal`) is timezone-correct and tested.
 
 **Fabrication removed, not merely relabeled, per this phase's integrity rule:** no `StudySession` or `HabitLog` history is fabricated anywhere. Both start genuinely empty for every user and contain only what they actually do from this point forward — Phase 1's `createSeedHabitLogs` (a same-day mock percentage per habit) is deleted outright, not reworked. This is a deliberate asymmetry with `Task`/`Deadline`/`CalendarEvent` seed data, which remains: those represent *present-state* demo content ("what's on your plate right now"), not a fabricated *past* — the thing this phase's rule actually targets.
+
+**Testing strategy, settled in Phase 1 and unchanged since:** **Vitest**, `node` environment — no jsdom, since the domain layer (`src/domain/`) and the persistence layer (`src/persistence/`) are both deliberately React- and DOM-free, so a hand-rolled in-memory fake is enough to test storage/hydration behavior (including the SSR case: a `null` storage backend behaves as a safe no-op). 78 tests total across four files as of the Home redesign; the actual catalogue of what's implemented and tested is in §16, not repeated here. No component/hook-level testing library (e.g. Testing Library + jsdom) has been added — the judgment each phase has made is that what genuinely needs verifying at that layer (does this crash without `window`?) is already covered by the persistence-layer tests, and the remaining question (does the UI actually behave right) is answered by manual browser verification each phase, not a new dependency.
 
 ---
 
@@ -600,6 +650,8 @@ Ship exactly three, in this order: **(1)** NL capture with confirmation; **(2)**
 
 Keep the **separate desktop/mobile composition** for Today — it is the right call and the Phase 3 store now makes it cheap, since both trees read the same state and only presentation differs. Extend that pattern rather than collapsing to one responsive tree.
 
+> **Revised in Phase 2's Home redesign (§9.3):** "separate trees" now means separate *composition* (mobile picks its own card order and adds one mobile-only card), not separate *implementations* of the same row. Once `TodaysFocusCard`/`HabitTrackerCard` became genuinely interactive, duplicating their internals for mobile turned from a legitimate density difference into a real parity and maintenance risk — the two would silently drift. `TaskRow`/`HabitRow` are now shared; `NowPanel`, `TodaysFocusCard`, `UpcomingCard`, `TodayProgressStrip`, `HabitTrackerCard`, and `AiPreviewCard` are the *same* components on both breakpoints. Mobile's bias toward logging/capture is achieved through ordering (Today's Focus appears earlier; the AI card stays last) rather than through withholding capability.
+
 **Intent per breakpoint** (not merely layout):
 
 | | Mobile (<768) | Desktop (≥768) |
@@ -620,14 +672,14 @@ Note the existing breakpoint subtlety worth preserving: Today's cards are `grid-
 
 Baseline: **WCAG 2.1 AA.** Contrast has already been handled thoughtfully (accent chips hand-corrected to ≥4.5:1); the gaps are structural and interactive.
 
-**Must fix (all verified in the current code):**
-1. **One `<h1>` per page.** Remove the topbar's `<h1>` (make it a `<div>`/`<p>`, or make it *the* page heading and demote the hero). Currently every page has two.
-2. **Correct heading order** — `h1 → h2 → h3`. Card titles at `<h3>` need an intervening `<h2>`, or `SectionHeader` should accept a configurable level.
-3. **Wrap desktop task rows in `<label>`**, matching mobile, so the whole row toggles and the target clears 44px.
-4. **Make the avatar a real `<button>`** with an accessible name, or remove `cursor-pointer`.
-5. **Make "View all" a `<Link>`.**
-6. **Remove or implement** the search/⌘K/bell affordances.
-7. **Announce the running timer** with `aria-live="polite"` at a coarse cadence (e.g. per minute, not per second) plus an accessible text alternative to the SVG ring.
+**Must fix (all verified in the current code) — status after Phase 2's Home redesign:**
+1. ✅ **Fixed.** One `<h1>` per page — the topbar's route title is now every page's sole `<h1>`; `Hero`'s greeting (now `NowPanel`) and every `ComingSoon` page use `<h2>`. Verified on `/`, `/focus`, `/tasks`.
+2. ✅ **Fixed.** `SectionHeader` now takes a `level?: 2 | 3` prop; Today's Focus uses `2`, everything else defaults to `3` — a correct, non-skipping outline under the topbar's `<h1>`.
+3. ⚠️ **Not fixed.** `TaskRow`'s checkbox carries an `aria-label` (an accessible name), but the row is still not `<label>`-wrapped — clicking the title text doesn't toggle it, and the checkbox's own hit area remains under 44px. Genuinely still open.
+4. **Changed differently than proposed.** The avatar isn't a `<button>` — it's wrapped in a real `<Link href="/settings">` with an accessible name, which is arguably the better fix: it now goes somewhere real instead of just being keyboard-operable with nowhere to go.
+5. **Moot.** The mobile task/habit preview this applied to no longer exists — mobile shows the full interactive list directly (§9.3), so there is no capped "View all" affordance left to fix.
+6. ✅ **Fixed** — removed, not implemented. No command palette or notifications exist yet to back them.
+7. ⚠️ **Partially fixed.** The focus session countdown carries `aria-live="polite"`, but updates every second along with the display — not the coarse per-minute cadence this line asked for, which would still spam a screen reader with an announcement every second. No accessible text alternative to the SVG ring exists either. Both genuinely still open.
 
 **Ongoing requirements:** visible focus on every interactive element (the button primitive's `focus-visible` ring is good — apply it consistently); full keyboard operability for the Plan grid, including moving a session without a mouse; `prefers-reduced-motion` respected (already largely done); status never conveyed by colour alone (pillar chips already pair icon + text — keep that discipline for risk states); form inputs always labelled; a skip-to-content link once the shell is stable; `<time datetime>` for machine-readable dates.
 
@@ -635,19 +687,19 @@ Baseline: **WCAG 2.1 AA.** Contrast has already been handled thoughtfully (accen
 
 ## 23. Empty, loading, error and success states
 
-Currently: three empty states exist; **no loading, error or success states anywhere.** Fine while everything is a synchronous constant — a real defect the moment persistence and AI land. Design them as a system, once.
+Written when only three empty states existed and nothing else. **Status after Phases 1-2: loading and success states now exist; error states exist at the data layer only, with no user-facing surface yet.**
 
-| State | Requirement |
-| --- | --- |
-| **First run** (no data) | Not a zeroed dashboard. An onboarding invitation: add subjects, enter the next 2–3 deliverables, pick 3 habits. Must never fabricate sample data that looks real. |
-| **Empty section** | Explain the value and offer the action ("No deliverables yet — add one and Ascend can plan your week"). Keep the existing icon + message + action pattern; it's good. |
-| **Loading (hydration)** | Skeletons matching final layout — the unused `ui/skeleton.tsx` finally earns its place. Never a spinner over the whole shell. |
-| **Loading (AI)** | Inline, cancellable, with an honest label ("Drafting a plan…"). Never blocks the rest of the UI. |
-| **Error (storage)** | Non-destructive: preserve the bad data, explain plainly, offer export/reset. Never a blank screen. |
-| **Error (AI)** | Fall back to the deterministic path and say so ("Couldn't reach the planner — here's a rules-based plan"). |
-| **Success** | Quiet and immediate. Session completion is the one moment deserving a genuine, satisfying confirmation — it's the product's core loop closing. |
-| **Offline** | Everything except AI must work offline; AI surfaces degrade per §19.6. |
-| **Undo** | Destructive actions offer undo rather than a confirm dialog. |
+| State | Requirement | Status |
+| --- | --- | --- |
+| **First run** (no data) | Not a zeroed dashboard. An onboarding invitation: add subjects, enter the next 2–3 deliverables, pick 3 habits. Must never fabricate sample data that looks real. | Not built — first run still seeds mock tasks/deadlines rather than prompting the user to enter their own. Deliberately out of scope so far (Subjects don't exist yet). |
+| **Empty section** | Explain the value and offer the action. Keep the existing icon + message + action pattern. | ✅ Extended, not just kept: "nothing scheduled", "all done for today", "no habits", each with the icon+message pattern (`TodaysFocusCard`, `NowPanel`, `HabitTrackerCard`). |
+| **Loading (hydration)** | Skeletons matching final layout — `ui/skeleton.tsx` finally earns its place. Never a spinner over the whole shell. | ✅ Done. Every provider exposes `status`; `TodaysFocusCard`, `HabitTrackerCard`, and the mobile task list show `Skeleton` rows while storage hydrates, specifically so a returning user's real data never gets mistaken for "nothing here" (§18.1, §9.3). |
+| **Loading (AI)** | Inline, cancellable, honest label. Never blocks the rest of the UI. | Not applicable yet — no AI call exists to be loading. |
+| **Error (storage)** | Non-destructive: preserve the bad data, explain plainly, offer export/reset. Never a blank screen. | **Partial.** The mechanism is real and tested (§18.1): a corrupt or version-mismatched read is preserved under a `:corrupt-backup-*` key and the app falls back to empty rather than crashing — verified live. What's missing: "explain plainly" and "offer export/reset" are not built — the only signal today is a `console.warn`, invisible to the user. No export/reset UI exists (no Settings surface yet). |
+| **Error (AI)** | Fall back to the deterministic path and say so. | Not applicable yet — no AI call exists to fail. |
+| **Success** | Quiet and immediate. Session completion is the one moment deserving a genuine, satisfying confirmation. | ✅ Done. `/focus`'s completion view (§9.3): a plain checkmark, "Session complete" vs "Session ended", duration and task — calm, no gamification, exactly the one moment this row asked to get right. |
+| **Offline** | Everything except AI must work offline. | Effectively true today (everything is `localStorage` + client state) but never deliberately tested against a real offline/airplane-mode condition. |
+| **Undo** | Destructive actions offer undo rather than a confirm dialog. | Not built. "Remove from today" (§9.3) has no undo — reasoned as low-stakes (unschedules, doesn't delete) rather than fixed with new UI; a real gap once a Tasks/backlog page makes losing a task's schedule harder to notice. |
 
 Add a **React error boundary** per route segment and a **toast/feedback primitive** — neither exists today.
 
@@ -659,9 +711,9 @@ Add a **React error boundary** per route segment and a **toast/feedback primitiv
 
 **Must fix:**
 
-1. **Separate semantic status colours from pillar identity colours.** Today `red` means both *Life pillar* and *urgent/destructive*, and `orange` means both *Growth* and *needs attention*. Once risk states appear across Today, Plan and Work, colour will be genuinely ambiguous. Introduce a distinct status ramp (`success`/`warning`/`danger`/`info`) that is visually separable from the five pillar hues, and stop using pillar colours for severity.
-2. **Semantic heading component.** `SectionHeader` hardcodes `<h3>`; it needs a level prop to fix the outline (§22).
-3. **Fix the `h1`/`text-h3` mismatch** in the topbar — semantics and visual weight must agree.
+1. **Not yet fixed.** Separate semantic status colours from pillar identity colours. Today `red` means both *Life pillar* and *urgent/destructive*, and `orange` means both *Growth* and *needs attention* — the Home redesign's due-date risk chips (`TaskRow`, `UpcomingCard`) still reuse pillar red for urgency, the same collision as before. Genuinely still open; worth doing before Plan/Work introduce more risk states.
+2. ✅ **Fixed.** `SectionHeader` takes a `level?: 2 | 3` prop (§22).
+3. ✅ **Fixed.** The topbar's `<h1>` is the page's only heading now; there's no second `<h1>`/`text-h3` pairing to disagree with (§8, §22).
 
 **Must add** (all currently absent, all required by the specs above):
 
@@ -675,7 +727,7 @@ Add a **React error boundary** per route segment and a **toast/feedback primitiv
 - **Date/time and duration formatting utilities** — one place, so `"9:00 AM"` and `"Tomorrow"` are *rendered* rather than stored.
 - **Command palette.**
 
-**Housekeeping:** `shared/metric-card.tsx` is currently orphaned. It is well-built and the right shape for Progress's headline figures — keep it, but if Progress ends up not using it, delete it rather than letting it linger. The unused `ui/` primitives (`badge`, `dialog`, `scroll-area`, `separator`, `skeleton`) are the component library and will be needed by the specs above; leave them.
+**Housekeeping:** `shared/metric-card.tsx` was orphaned — no longer: it now powers `TodayProgressStrip` on Home (tasks done, minutes focused, habits logged), with `trend` deliberately never passed since no real week-over-week comparison exists yet. `ui/skeleton.tsx` was also unused — no longer: it backs the loading states in `TodaysFocusCard`/`HabitTrackerCard` while storage hydrates. The remaining unused `ui/` primitives (`badge`, `dialog`, `scroll-area`, `separator`) are still the component library and will be needed by the specs above; leave them.
 
 ---
 
@@ -685,33 +737,33 @@ Everything currently making Ascend feel like a prototype, ranked strictly by pro
 
 ### P0 — blocks the product from existing
 
-| # | Gap | Why it's P0 |
-| --- | --- | --- |
-| 1 | **No real dates/times** — all temporal data is display strings | Nothing can be scheduled, sorted, forecast or analysed. Every other feature depends on this, and fixing it later means migrating real user data. |
-| 2 | **No `Session` entity** — the timer logs nothing | The atomic unit of value. Without it there is no history, no "hours this week", no adherence, no estimate drift, and nothing for AI to reason about. |
-| 3 | **No persistence** | An app that forgets yesterday cannot deliver a thesis built on accumulated behaviour. |
-| 4 | **Fabricated metrics** — balance score, "18% higher", habit percentages, phantom calendar dots | Actively destroys trust in every future real number. Removal is nearly free and immediately raises product integrity. |
-| 5 | **No relationships between entities** — no Subject, no Deliverable→Task link | Cannot answer "what's left for Chemistry?", the user's most frequent question. |
+| # | Gap | Why it's P0 | Status |
+| --- | --- | --- | --- |
+| 1 | **No real dates/times** — all temporal data is display strings | Nothing can be scheduled, sorted, forecast or analysed. Every other feature depends on this, and fixing it later means migrating real user data. | ✅ **Resolved (Phase 1).** Real ISO datetimes throughout; `domain/time.ts`/`domain/metrics.ts` are the catalogue (§16). |
+| 2 | **No `Session` entity** — the timer logs nothing | The atomic unit of value. Without it there is no history, no "hours this week", no adherence, no estimate drift, and nothing for AI to reason about. | ✅ **Resolved (Phase 2).** `StudySession` real and persisted; see §6.2's "as implemented" note and §18.1 for the `outcome` design. |
+| 3 | **No persistence** | An app that forgets yesterday cannot deliver a thesis built on accumulated behaviour. | ✅ **Resolved (Phase 2, PR #5).** `localStorage` behind a `Repository<T>` — §18.1. |
+| 4 | **Fabricated metrics** — balance score, "18% higher", habit percentages, phantom calendar dots | Actively destroys trust in every future real number. Removal is nearly free and immediately raises product integrity. | ✅ **Resolved.** Balance score and the AI claim deleted (Phase 1); calendar dots now derived from real `CalendarEvent[]` (Phase 1); habit percentages replaced by real logs (Phase 2) and a 7-day grid + streak (Home redesign, §9.3). |
+| 5 | **No relationships between entities** — no Subject, no Deliverable→Task link | Cannot answer "what's left for Chemistry?", the user's most frequent question. | **Still open.** `Subject`/`Deliverable` don't exist; `Task.deadlineId` exists but no seed task uses it (§6.2). This is Phase 4 (Work) — the recommended next phase. |
 
 ### P1 — blocks the product from being usable
 
-| # | Gap | Why |
-| --- | --- | --- |
-| 6 | **Shallow task behaviour** — toggle only; no create/edit/delete/estimate | The user cannot put their real life into the app. |
-| 7 | **Inert controls** — AI send, search, ⌘K, bell, "View all" | Teaches the user the app is a mockup. Cheap to fix. |
-| 8 | **No free-time / risk engine** | The differentiating capability (§1). Deterministic and buildable now. |
-| 9 | **No onboarding or personalisation** | Ascend cannot know the user's subjects, deadlines or targets — so it cannot be useful even in principle. |
-| 10 | **Habit model conflates definition with statistic** | Blocks logging, streaks and cadence — i.e. all real habit value. |
-| 11 | **Six placeholder routes** | The nav promises a product that doesn't exist. Prefer a shorter nav (§7.2). |
+| # | Gap | Why | Status |
+| --- | --- | --- | --- |
+| 6 | **Shallow task behaviour** — toggle only; no create/edit/delete/estimate | The user cannot put their real life into the app. | ✅ **Resolved for Home (redesign phase).** Add/remove/reorder/complete, due/estimate metadata, all through `TaskProvider`. Full create/edit (a dedicated form, priority, description) is still Phase 4 — see §6.2's rejected-fields note. |
+| 7 | **Inert controls** — AI send, search, ⌘K, bell, "View all" | Teaches the user the app is a mockup. Cheap to fix. | ✅ **Resolved, by removal.** All five removed rather than implemented (§8, §14, §22 item 5) — none had a real feature behind it yet. |
+| 8 | **No free-time / risk engine** | The differentiating capability (§1). Deterministic and buildable now. | **Still open.** Needs `CalendarEvent` at volume + Preferences; this is Phase 5 (Plan). `deadlineRisk` (§16) is a time-proximity stand-in, not this. |
+| 9 | **No onboarding or personalisation** | Ascend cannot know the user's subjects, deadlines or targets — so it cannot be useful even in principle. | **Still open.** First-run still seeds mock content rather than prompting (§23). |
+| 10 | **Habit model conflates definition with statistic** | Blocks logging, streaks and cadence — i.e. all real habit value. | ✅ **Resolved for logging and streaks (Phase 2 + Home redesign).** `HabitLog` is real and dated; `habitStreak`/`weeklyCompletionGrid` are real derivations. Cadence itself remains deliberately unbuilt (§12, §18.1). |
+| 11 | **Six placeholder routes** | The nav promises a product that doesn't exist. Prefer a shorter nav (§7.2). | **Still open.** The IA recommendation in §7.2 (five sections, renamed) has not been acted on; the six placeholder routes and current names are unchanged. |
 
 ### P2 — quality and durability
 
-| # | Gap |
-| --- | --- |
-| 12 | No loading/error/success state system; no error boundaries; no feedback layer |
-| 13 | No user preferences (45-min timer hardcoded; no targets, no waking hours) |
-| 14 | Accessibility defects (duplicate `h1`, heading order, small targets, non-focusable controls) |
-| 15 | Pillar/status colour collision |
+| # | Gap | Status |
+| --- | --- | --- |
+| 12 | No loading/error/success state system; no error boundaries; no feedback layer | **Partial.** Loading and success states real (§23); no error boundaries, no toast/feedback layer, no user-facing storage-error message yet. |
+| 13 | No user preferences (45-min timer hardcoded; no targets, no waking hours) | **Still open.** `STUDY_SESSION_SECONDS` is still a hardcoded constant; no Settings surface exists. |
+| 14 | Accessibility defects (duplicate `h1`, heading order, small targets, non-focusable controls) | **Partial — see §22 for the itemized, honest status.** Duplicate `h1` and heading order fixed; small targets (task row hit area) and the timer's announcement cadence remain open. |
+| 15 | Pillar/status colour collision | **Still open — confirmed still present** in the Home redesign's new risk chips (§24 item 1). Not addressed this session. |
 | 16 | No tests around the store or derivations — the derivation catalogue (§16) is exactly what deserves unit tests |
 | 17 | `CALENDAR_PREVIEW` hardcoded to a specific week — already wrong on any real date |
 | 18 | No export/import |
@@ -743,6 +795,8 @@ multi-user/teams/classrooms · parent or teacher visibility · social features �
 ## 27. Phased implementation roadmap
 
 Eight phases. Ordered strictly by dependency, and deliberately front-loaded with non-visual work — the first two phases add almost no new UI, which is the point. Phases 1–3 are the ones that convert the prototype into a product.
+
+**Status: Phases 1-2 shipped, with real scope divergence from the plan below — not a 1:1 match, by deliberate choice each time rather than drift.** Actual Phase 1 (`domain/`, real dates) shipped *without* `Subject`/`Deliverable` — deferred whole to Phase 4, since nothing yet needs them and inventing them early would have been schema ahead of a consumer. Actual Phase 2 shipped persistence *and* Sessions/Habits together (this roadmap splits them into Phases 2 and 3), but *without* `UserPreferences`, a Settings page, export/import, error boundaries, or a toast/undo layer — none had anywhere to live yet (no Settings surface) or a concrete trigger (no error UI has ever needed to fire). A third pass then rebuilt Home entirely (not separately planned below — closest to Phase 6, done earlier because direct product input called for it). Each divergence is documented where it happened: §9.3 (Home), §18.1 (persistence/Sessions/Habits), §16 (what's actually implemented vs. planned), §25 (per-gap resolution status). Treat the phase descriptions below as the ordering logic and acceptance bar, not a literal changelog of what shipped when.
 
 ---
 

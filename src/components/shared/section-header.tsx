@@ -8,6 +8,11 @@ type SectionHeaderProps = {
   icon?: LucideIcon;
   action?: React.ReactNode;
   className?: string;
+  /** Heading level for `title`. Defaults to 3: the topbar's route title is
+   *  every page's one `<h1>`, so a card title one level down is an `<h2>`
+   *  only for the page's most structurally important sections — everything
+   *  else stays `<h3>` to avoid a false sense of equal importance. */
+  level?: 2 | 3;
 };
 
 function SectionHeader({
@@ -16,7 +21,11 @@ function SectionHeader({
   icon: Icon,
   action,
   className,
+  level = 3,
 }: SectionHeaderProps) {
+  const Heading = level === 2 ? "h2" : "h3";
+  const headingSize = level === 2 ? "text-h2" : "text-h3";
+
   return (
     <div className={cn("flex items-start justify-between gap-4", className)}>
       <div className="flex items-start gap-3">
@@ -26,7 +35,7 @@ function SectionHeader({
           </span>
         ) : null}
         <div className="flex flex-col gap-0.5">
-          <h3 className="text-h3 text-foreground">{title}</h3>
+          <Heading className={cn(headingSize, "text-foreground")}>{title}</Heading>
           {description ? (
             <p className="text-body text-muted-foreground">{description}</p>
           ) : null}

@@ -69,3 +69,25 @@ export function habitStreak(logs: HabitLog[], habitId: string, now: Date): numbe
   }
   return streak;
 }
+
+export type DayCompletion = { date: Date; completed: boolean };
+
+/**
+ * Monday-first, 7-day completion grid for `habitId`, for the calendar week
+ * containing `now` (see `domain/time.startOfWeek`). Every entry reflects a
+ * real logged date — there is deliberately no cadence/target concept here
+ * (nothing in the product lets a user set one yet), so this can only ever
+ * answer "was it logged this day", never "was the target met".
+ */
+export function weeklyCompletionGrid(
+  logs: HabitLog[],
+  habitId: string,
+  now: Date
+): DayCompletion[] {
+  const monday = startOfWeek(now);
+  const loggedDates = new Set(logs.filter((l) => l.habitId === habitId).map((l) => l.date));
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(monday, i);
+    return { date, completed: loggedDates.has(toIsoDateLocal(date)) };
+  });
+}
