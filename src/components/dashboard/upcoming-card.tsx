@@ -5,14 +5,15 @@ import { CalendarCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { PillBadge } from "@/components/shared/pill-badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ACCENT_CHIP_CLASSES } from "@/lib/colors";
 import { PILLARS } from "@/lib/pillars";
 import { cn } from "@/lib/utils";
 import { formatRelativeDay } from "@/lib/format-date";
-import { deadlineRisk } from "@/domain/time";
+import { deadlineRisk, sortByIsoDate } from "@/domain/time";
 import { useNow } from "@/domain/use-now";
-import { createSeedDeadlines } from "@/data/dashboard";
-import type { Deadline } from "@/domain/types";
+import { useDeliverables } from "@/state/deliverable-context";
+import type { Deliverable } from "@/domain/types";
 
 function EmptyUpcoming() {
   return (
@@ -23,14 +24,14 @@ function EmptyUpcoming() {
   );
 }
 
-function DeadlineRow({ deadline, now }: { deadline: Deadline; now: Date }) {
-  const pillar = PILLARS[deadline.pillar];
+function DeliverableRow({ deliverable, now }: { deliverable: Deliverable; now: Date }) {
+  const pillar = PILLARS[deliverable.pillar];
   const Icon = pillar.icon;
   // Urgency is derived from the real due date every render, never a
   // hand-authored flag — see `domain/time.deadlineRisk`.
-  const risk = deadlineRisk(deadline.dueAt, now);
+  const risk = deadlineRisk(deliverable.dueAt, now);
   const isUrgent = risk !== "on-track";
-  const label = formatRelativeDay(deadline.dueAt, now);
+  const label = formatRelativeDay(deliverable.dueAt, now);
 
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
@@ -43,7 +44,7 @@ function DeadlineRow({ deadline, now }: { deadline: Deadline; now: Date }) {
         <Icon className="size-4" strokeWidth={2} />
       </span>
       <p className="flex-1 truncate text-body font-medium text-foreground">
-        {deadline.title}
+        {deliverable.title}
       </p>
       {isUrgent ? (
         <PillBadge color="red">{label}</PillBadge>
@@ -56,19 +57,29 @@ function DeadlineRow({ deadline, now }: { deadline: Deadline; now: Date }) {
 
 function UpcomingCard() {
   const now = useNow();
-  // Empty until real "now" is available (see `useNow`) — the alternative
-  // would be guessing relative dates at build time, which is wrong the
-  // moment the calendar turns over.
-  const deadlines = useMemo(() => (now ? createSeedDeadlines(now) : []), [now]);
+  const { deliverables, status } = useDeliverables();
+
+  // Real, shared `DeliverableProvider` state — the same records Work reads
+  // and edits (PRODUCT_BLUEPRINT.md §7.2). Submitted deliverables drop off
+  // once completed; the rest are soonest-due first.
+  const upcoming = useMemo(() => {
+    const outstanding = deliverables.filter((d) => d.completedAt == null);
+    return sortByIsoDate(outstanding, (d) => d.dueAt);
+  }, [deliverables]);
 
   return (
     <Card className="w-full">
       <CardContent>
         <SectionHeader title="Upcoming" description="Deadlines on your radar" />
-        {deadlines.length > 0 && now ? (
+        {status === "loading" ? (
+          <div className="mt-4 flex flex-col gap-3" aria-hidden="true">
+            <Skeleton className="h-10 w-full rounded-[10px]" />
+            <Skeleton className="h-10 w-full rounded-[10px]" />
+          </div>
+        ) : upcoming.length > 0 && now ? (
           <div className="mt-4">
-            {deadlines.map((deadline) => (
-              <DeadlineRow key={deadline.id} deadline={deadline} now={now} />
+            {upcoming.map((deliverable) => (
+              <DeliverableRow key={deliverable.id} deliverable={deliverable} now={now} />
             ))}
           </div>
         ) : (

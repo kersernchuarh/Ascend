@@ -6,6 +6,7 @@ import {
   daysUntilDue,
   deadlineRisk,
   endOfDay,
+  fromIsoDateLocal,
   isDueToday,
   isOverdue,
   isSameDay,
@@ -42,6 +43,15 @@ describe("startOfDay / endOfDay / isSameDay", () => {
 
   it("isSameDay is true for different times on the same day", () => {
     expect(isSameDay(new Date(2026, 8, 4, 0, 1), new Date(2026, 8, 4, 23, 59))).toBe(true);
+  });
+
+  it("fromIsoDateLocal parses a bare YYYY-MM-DD as local midnight, round-tripping with toIsoDateLocal", () => {
+    const d = fromIsoDateLocal("2026-09-04");
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(8);
+    expect(d.getDate()).toBe(4);
+    expect(d.getHours()).toBe(0);
+    expect(toIsoDateLocal(d)).toBe("2026-09-04");
   });
 
   it("isSameDay is false across a day boundary", () => {

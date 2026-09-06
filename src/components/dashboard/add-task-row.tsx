@@ -4,10 +4,8 @@ import { useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PILLARS, type PillarId } from "@/lib/pillars";
-import { cn } from "@/lib/utils";
-
-const PILLAR_ORDER: PillarId[] = ["academics", "health", "mind", "growth", "life", "productivity"];
+import { PillarPicker } from "@/components/shared/pillar-picker";
+import type { PillarId } from "@/lib/pillars";
 
 function AddTaskRow({ onAdd }: { onAdd: (title: string, pillar: PillarId) => void }) {
   const [title, setTitle] = useState("");
@@ -40,31 +38,7 @@ function AddTaskRow({ onAdd }: { onAdd: (title: string, pillar: PillarId) => voi
           <Plus className="size-4" />
         </Button>
       </div>
-      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Pillar for new task">
-        {PILLAR_ORDER.map((id) => {
-          const p = PILLARS[id];
-          const Icon = p.icon;
-          const selected = pillar === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={p.label}
-              onClick={() => setPillar(id)}
-              className={cn(
-                "flex size-7 items-center justify-center rounded-[8px] border transition-colors",
-                selected
-                  ? "border-primary bg-primary/15 text-primary"
-                  : "border-border text-muted-foreground hover:border-[#2a3441] hover:text-foreground"
-              )}
-            >
-              <Icon className="size-3.5" strokeWidth={2} />
-            </button>
-          );
-        })}
-      </div>
+      <PillarPicker value={pillar} onChange={setPillar} label="Pillar for new task" />
     </form>
   );
 }

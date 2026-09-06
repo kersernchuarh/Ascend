@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
+import { SubjectProvider } from "@/state/subject-context";
+import { DeliverableProvider } from "@/state/deliverable-context";
 import { TaskProvider } from "@/state/task-context";
 import { SessionProvider } from "@/state/session-context";
 import { HabitProvider } from "@/state/habit-context";
@@ -19,23 +21,27 @@ type AppShellProps = {
 function AppShell({ children }: AppShellProps) {
   return (
     <SidebarProvider>
-      <TaskProvider>
-        <SessionProvider>
-          <HabitProvider>
-            <div className="flex min-h-screen w-full">
-              <Sidebar />
-              <div className="flex min-w-0 flex-1 flex-col">
-                <Topbar />
-                <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
-                  <div className="mx-auto w-full max-w-[1440px]">{children}</div>
-                </main>
-              </div>
-            </div>
-            <MobileBottomNav />
-            <FloatingAiButton />
-          </HabitProvider>
-        </SessionProvider>
-      </TaskProvider>
+      <SubjectProvider>
+        <DeliverableProvider>
+          <TaskProvider>
+            <SessionProvider>
+              <HabitProvider>
+                <div className="flex min-h-screen w-full">
+                  <Sidebar />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <Topbar />
+                    <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
+                      <div className="mx-auto w-full max-w-[1440px]">{children}</div>
+                    </main>
+                  </div>
+                </div>
+                <MobileBottomNav />
+                <FloatingAiButton />
+              </HabitProvider>
+            </SessionProvider>
+          </TaskProvider>
+        </DeliverableProvider>
+      </SubjectProvider>
     </SidebarProvider>
   );
 }

@@ -18,7 +18,7 @@ export type NavItem = {
 
 export const SIDEBAR_NAV: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
-  { label: "Tasks", href: "/tasks", icon: CheckSquare },
+  { label: "Work", href: "/work", icon: CheckSquare },
   { label: "Calendar", href: "/calendar", icon: Calendar },
   { label: "Habits", href: "/habits", icon: Repeat },
   { label: "Insights", href: "/insights", icon: BarChart3 },
@@ -31,7 +31,7 @@ export const SIDEBAR_FOOTER_NAV: NavItem[] = [
 
 export const MOBILE_NAV: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
-  { label: "Tasks", href: "/tasks", icon: CheckSquare },
+  { label: "Work", href: "/work", icon: CheckSquare },
   { label: "Calendar", href: "/calendar", icon: Calendar },
   { label: "AI", href: "/ai", icon: Sparkles },
   { label: "More", href: "/more", icon: MoreHorizontal },
@@ -41,7 +41,7 @@ export const MOBILE_NAV: NavItem[] = [
  *  from the nav arrays above, since "/" and "/more" don't map 1:1 onto either list. */
 export const ROUTE_TITLES: Record<string, string> = {
   "/": "Home",
-  "/tasks": "Tasks",
+  "/work": "Work",
   "/calendar": "Calendar",
   "/habits": "Habits",
   "/insights": "Insights",

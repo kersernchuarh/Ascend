@@ -1,5 +1,5 @@
 import { BookOpen, Droplets, Flame, Moon, MonitorOff } from "lucide-react";
-import type { Task, Deadline, CalendarEvent, Habit } from "@/domain/types";
+import type { Task, Deliverable, CalendarEvent, Habit, Subject } from "@/domain/types";
 import { addDays, endOfDay, startOfDay, startOfWeek } from "@/domain/time";
 
 /**
@@ -99,10 +99,34 @@ export function createSeedTasks(now: Date): Task[] {
       createdAt: atDaysFromNow(now, -2, 12, 0),
       scheduledFor: atDaysFromNow(now, -1, 18, 0),
     },
+    // No `scheduledFor` at all — a real Work backlog item, linked to the
+    // Chemistry lab report deliverable (`d1`, `createSeedDeliverables`).
+    // Exercises Work's deliverable→task nesting and Home's "add existing
+    // task to today" picker out of the box, rather than only once a user
+    // has created their own linked task.
+    {
+      id: "t8",
+      title: "Write lab report conclusion",
+      pillar: "academics",
+      createdAt: atDaysFromNow(now, -1, 18, 0),
+      estimateMinutes: 30,
+      deliverableId: "d1",
+    },
   ];
 }
 
-export function createSeedDeadlines(now: Date): Deadline[] {
+/** Every seeded academic deliverable below links to one of these — seeded
+ *  once, alongside them, on a genuinely first-ever run (see
+ *  `SubjectProvider`). A returning user's real subjects, once any exist,
+ *  are never replaced by this list. */
+export function createSeedSubjects(now: Date): Subject[] {
+  return [
+    { id: "sub1", name: "Chemistry", createdAt: atDaysFromNow(now, -30, 9, 0) },
+    { id: "sub2", name: "History", createdAt: atDaysFromNow(now, -30, 9, 0) },
+  ];
+}
+
+export function createSeedDeliverables(now: Date): Deliverable[] {
   // All day-granularity: nobody specified an exact submission minute for any
   // of these, so `dueAt` is anchored to end-of-day rather than inventing one.
   const dueInDays = (days: number) => endOfDay(addDays(now, days)).toISOString();
@@ -111,19 +135,26 @@ export function createSeedDeadlines(now: Date): Deadline[] {
       id: "d1",
       title: "Chemistry lab report",
       pillar: "academics",
+      subjectId: "sub1",
       dueAt: dueInDays(1),
       allDay: true,
+      estimateMinutes: 90,
       createdAt: atDaysFromNow(now, -3, 9, 0),
     },
     {
       id: "d2",
       title: "History essay draft",
       pillar: "academics",
+      subjectId: "sub2",
       dueAt: dueInDays(3),
       allDay: true,
+      estimateMinutes: 120,
       createdAt: atDaysFromNow(now, -5, 9, 0),
     },
     {
+      // No subject — deliberately not every deliverable is academic, so
+      // Work's "Unassigned" group has a real, seeded reason to exist rather
+      // than only ever appearing once a user creates one by hand.
       id: "d3",
       title: "Club meeting prep",
       pillar: "productivity",
