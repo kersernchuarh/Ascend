@@ -1,17 +1,19 @@
 import { cn } from "@/lib/utils";
 import { ACCENT_CHIP_CLASSES, ACCENT_SOLID_CLASSES } from "@/lib/colors";
+import { HABIT_ICON_MAP } from "@/lib/habit-icons";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { DayCompletion } from "@/domain/metrics";
 import type { Habit } from "@/domain/types";
 
 /**
  * "Did I do this today?" is the checkbox. "How consistently have I been
- * doing it?" is the 7-day grid — real logged days, Monday first, nothing
- * extrapolated for days with no entry. No percentage, no cadence/adherence:
- * neither is derivable without a target the product doesn't let a user set
- * yet (see PRODUCT_BLUEPRINT.md's Phase 2 record) — the grid answers "what
- * days did I miss" without needing one. The streak (from
- * `domain/metrics.habitStreak`) only renders once it's actually > 0.
+ * doing it?" is the compact 7-day grid — real logged days, Monday first,
+ * nothing extrapolated for days with no entry. Deliberately still no
+ * adherence figure here even though cadence now exists (see
+ * `domain/metrics.habitAdherence`) — that's the Habits page's fuller
+ * `HabitCard`'s job; Home's row stays this lean on purpose. The streak
+ * (cadence-aware — `domain/metrics.habitStreak`) only renders once it's
+ * actually > 0, and its unit switches to weeks for a `times_per_week` habit.
  */
 function HabitRow({
   habit,
@@ -26,8 +28,9 @@ function HabitRow({
   weekGrid: DayCompletion[];
   onToggle: () => void;
 }) {
-  const Icon = habit.icon;
+  const Icon = HABIT_ICON_MAP[habit.iconKey];
   const daysLogged = weekGrid.filter((d) => d.completed).length;
+  const streakUnit = habit.cadence.type === "times_per_week" ? "week" : "day";
 
   return (
     <div className="flex items-center gap-3 py-2">
@@ -56,7 +59,8 @@ function HabitRow({
           </span>
           {streak > 0 ? (
             <span className="shrink-0 text-caption font-medium text-primary">
-              {streak} day{streak === 1 ? "" : "s"}
+              {streak} {streakUnit}
+              {streak === 1 ? "" : "s"}
             </span>
           ) : null}
         </div>

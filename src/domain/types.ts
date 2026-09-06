@@ -1,6 +1,6 @@
-import type { LucideIcon } from "lucide-react";
 import type { PillarId } from "@/lib/pillars";
 import type { AccentColor } from "@/lib/colors";
+import type { HabitIconKey } from "@/lib/habit-icons";
 
 /**
  * Canonical domain entities for Ascend. These are DOMAIN DATA: every date or
@@ -159,12 +159,42 @@ export type StudySession = {
   outcome: "completed" | "abandoned";
 };
 
+/** How often a `Habit` is expected, and against what target — what makes a
+ *  bare completion count into a real adherence figure (blueprint §12). The
+ *  smallest set that covers "every day", "specific days", and "some number
+ *  of times, any days" without inventing cases nothing asks for. No
+ *  separate top-level `target` field on `Habit`: it would be meaningless
+ *  for `daily`/`days_of_week` (the days themselves already say what's
+ *  expected), so it lives only in the variant that needs it. */
+export type HabitCadence =
+  | { type: "daily" }
+  /** `days`: 0=Sunday..6=Saturday, matching `Date.getDay()`. */
+  | { type: "days_of_week"; days: number[] }
+  | { type: "times_per_week"; target: number };
+
 /** A recurring behaviour the user tracks. Owns no statistic — see `HabitLog`. */
 export type Habit = {
   id: string;
   label: string;
-  icon: LucideIcon;
+  /** Optional reminder of what the habit actually means to the user (e.g.
+   *  "20 pages" for Reading) — durable and user-authored enough to earn a
+   *  field, the same reasoning `Deliverable.description` used; unlike
+   *  `Task`, nothing here is a fast, disposable action. */
+  description?: string;
+  cadence: HabitCadence;
+  /** A key into `lib/habit-icons.HABIT_ICON_MAP`, resolved to a real
+   *  component only at render time — deliberately not the component itself,
+   *  which isn't JSON-serializable and comes back broken after a
+   *  `localStorage` round-trip (a real bug live testing caught). */
+  iconKey: HabitIconKey;
   color: AccentColor;
+  createdAt: string;
+  /** ISO datetime the habit was archived; absent means active. Archiving is
+   *  the only removal a `Habit` supports — never a real delete — because its
+   *  `HabitLog` history must survive (blueprint §16's referential-integrity
+   *  rule for Habits and Subjects). An archived habit stops appearing in
+   *  "due today" surfaces but its logs, streak and history remain intact. */
+  archivedAt?: string;
 };
 
 /**

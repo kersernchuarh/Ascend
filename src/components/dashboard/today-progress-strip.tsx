@@ -1,13 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
 import { CheckCircle2, Clock, Hourglass, Repeat } from "lucide-react";
 import { MetricCard } from "@/components/shared/metric-card";
-import { SEED_HABITS, createSeedCalendarEvents } from "@/data/dashboard";
+import { createSeedCalendarEvents } from "@/data/dashboard";
 import { useTasks } from "@/state/task-context";
 import { useSessions } from "@/state/session-context";
 import { useHabits } from "@/state/habit-context";
 import { useNow } from "@/domain/use-now";
-import { totalFocusedMinutes } from "@/domain/metrics";
+import { dueTodayHabits, totalFocusedMinutes } from "@/domain/metrics";
 import { freeMinutesForDay } from "@/domain/plan";
 
 /**
@@ -20,11 +21,12 @@ import { freeMinutesForDay } from "@/domain/plan";
 function TodayProgressStrip() {
   const { tasks, todayTasks, completedCount, status: taskStatus } = useTasks();
   const { sessions, status: sessionStatus } = useSessions();
-  const { isCompletedToday, status: habitStatus } = useHabits();
+  const { habits, isCompletedToday, status: habitStatus } = useHabits();
   const now = useNow();
 
   const focusedMinutes = now ? totalFocusedMinutes(sessions, now) : 0;
-  const habitsLogged = SEED_HABITS.filter((habit) => isCompletedToday(habit.id)).length;
+  const dueToday = useMemo(() => (now ? dueTodayHabits(habits, now) : []), [habits, now]);
+  const habitsLogged = dueToday.filter((habit) => isCompletedToday(habit.id)).length;
   const ready = taskStatus === "ready" && sessionStatus === "ready" && habitStatus === "ready";
 
   // `CalendarEvent` is still seed-only (Plan's status note, PRODUCT_BLUEPRINT.md
@@ -60,7 +62,7 @@ function TodayProgressStrip() {
       <MetricCard
         label="Habits logged"
         value={ready ? `${habitsLogged}` : "–"}
-        unit={ready ? `/${SEED_HABITS.length}` : undefined}
+        unit={ready ? `/${dueToday.length}` : undefined}
         icon={Repeat}
         color="primary"
       />

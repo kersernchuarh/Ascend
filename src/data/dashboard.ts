@@ -1,4 +1,3 @@
-import { BookOpen, Droplets, Flame, Moon, MonitorOff } from "lucide-react";
 import type { Task, Deliverable, CalendarEvent, Habit, Subject } from "@/domain/types";
 import { addDays, endOfDay, startOfDay, startOfWeek } from "@/domain/time";
 
@@ -190,14 +189,28 @@ export function createSeedCalendarEvents(now: Date): CalendarEvent[] {
   ];
 }
 
-/** Static habit definitions — no time dependency, unlike their logs. */
-export const SEED_HABITS: Habit[] = [
-  { id: "h1", label: "Sleep", icon: Moon, color: "primary" },
-  { id: "h2", label: "Exercise", icon: Flame, color: "orange" },
-  { id: "h3", label: "Water", icon: Droplets, color: "blue" },
-  { id: "h4", label: "Reading", icon: BookOpen, color: "teal" },
-  { id: "h5", label: "No screen before bed", icon: MonitorOff, color: "green" },
-];
+/**
+ * Present-state demo habit *definitions* — seeded once by `HabitProvider` on
+ * a genuinely first-ever run, exactly like `createSeedTasks`/
+ * `createSeedSubjects`, then real, editable, archivable state from that
+ * point forward. This is definition-only content (name, cadence, icon), not
+ * fabricated history — no `HabitLog` is ever seeded alongside these, so a
+ * new user's actual completion record starts genuinely empty regardless of
+ * how many demo habits exist (PRODUCT_BLUEPRINT.md §18.1's fabrication
+ * rule). Cadences are a deliberate, reasonable default per habit, not
+ * arbitrary: Sleep/Water/No-screen are every-day habits; Exercise/Reading
+ * are realistic few-times-a-week ones.
+ */
+export function createSeedHabits(now: Date): Habit[] {
+  const createdAt = atDaysFromNow(now, -14, 9, 0);
+  return [
+    { id: "h1", label: "Sleep", cadence: { type: "daily" }, iconKey: "sleep", color: "primary", createdAt },
+    { id: "h2", label: "Exercise", cadence: { type: "times_per_week", target: 3 }, iconKey: "exercise", color: "orange", createdAt },
+    { id: "h3", label: "Water", cadence: { type: "daily" }, iconKey: "water", color: "blue", createdAt },
+    { id: "h4", label: "Reading", cadence: { type: "times_per_week", target: 3 }, iconKey: "reading", color: "teal", createdAt },
+    { id: "h5", label: "No screen before bed", cadence: { type: "daily" }, iconKey: "screen_free", color: "green", createdAt },
+  ];
+}
 
 /** Product concepts, not working actions — see AiPreviewCard/FloatingAiButton.
  *  Shared so the desktop and mobile "coming soon" surfaces stay in sync. */
