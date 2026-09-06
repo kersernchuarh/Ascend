@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { ClipboardCheck, PartyPopper } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, PartyPopper } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,8 +10,12 @@ import { AddTaskRow } from "@/components/dashboard/add-task-row";
 import { AddExistingTaskRow } from "@/components/dashboard/add-existing-task-row";
 import { useTasks } from "@/state/task-context";
 import { useDeliverables } from "@/state/deliverable-context";
+import { useSessions } from "@/state/session-context";
 import { useNow } from "@/domain/use-now";
 import { isDueToday } from "@/domain/time";
+import { freeMinutesForDay } from "@/domain/plan";
+import { createSeedCalendarEvents } from "@/data/dashboard";
+import { formatDuration } from "@/lib/format-date";
 import type { PillarId } from "@/lib/pillars";
 
 function TodaysFocusCard() {
@@ -27,6 +31,7 @@ function TodaysFocusCard() {
     removeFromToday,
   } = useTasks();
   const { deliverables } = useDeliverables();
+  const { sessions } = useSessions();
   const now = useNow();
 
   // Same shared `DeliverableProvider` state Work reads and writes — editing
@@ -49,6 +54,23 @@ function TodaysFocusCard() {
 
   const allDone = status === "ready" && tasks.length > 0 && completedCount === tasks.length;
 
+  // Whether today's plan genuinely doesn't fit the time actually left today
+  // — real minutes on both sides, never a fabricated score. Only tasks with
+  // their own `estimateMinutes` count toward "planned"; a task with no
+  // estimate contributes nothing, since there's no honest duration to add.
+  // A due date is not scheduled work (this product's own rule) — only tasks
+  // already scheduled for today count here.
+  const scheduleFit = useMemo(() => {
+    if (!now || status !== "ready") return null;
+    const plannedMinutes = tasks
+      .filter((task) => !task.completedAt)
+      .reduce((sum, task) => sum + (task.estimateMinutes ?? 0), 0);
+    if (plannedMinutes === 0) return null;
+    const events = createSeedCalendarEvents(now);
+    const freeMinutes = freeMinutesForDay(now, events, allTasks, sessions, now);
+    return plannedMinutes > freeMinutes ? { plannedMinutes, freeMinutes } : null;
+  }, [tasks, allTasks, sessions, now, status]);
+
   function handleAdd(title: string, pillar: PillarId) {
     if (!now) return;
     addTask({ title, pillar, scheduledFor: now.toISOString() });
@@ -67,6 +89,13 @@ function TodaysFocusCard() {
           title="Today's Focus"
           description={status === "ready" ? `${completedCount}/${tasks.length} completed` : undefined}
         />
+        {scheduleFit ? (
+          <p className="mt-3 flex items-center gap-1.5 text-caption text-orange">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            Today&apos;s plan needs {formatDuration(scheduleFit.plannedMinutes)}, but only{" "}
+            {formatDuration(scheduleFit.freeMinutes)} is free
+          </p>
+        ) : null}
         {status === "loading" ? (
           <div className="mt-4 flex flex-col gap-3" aria-hidden="true">
             <Skeleton className="h-14 w-full rounded-[10px]" />

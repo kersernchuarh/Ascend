@@ -1,23 +1,24 @@
 "use client";
 
-import { CheckCircle2, Clock, Repeat } from "lucide-react";
+import { CheckCircle2, Clock, Hourglass, Repeat } from "lucide-react";
 import { MetricCard } from "@/components/shared/metric-card";
-import { SEED_HABITS } from "@/data/dashboard";
+import { SEED_HABITS, createSeedCalendarEvents } from "@/data/dashboard";
 import { useTasks } from "@/state/task-context";
 import { useSessions } from "@/state/session-context";
 import { useHabits } from "@/state/habit-context";
 import { useNow } from "@/domain/use-now";
 import { totalFocusedMinutes } from "@/domain/metrics";
+import { freeMinutesForDay } from "@/domain/plan";
 
 /**
  * Replaces the Weekly Balance donut, which could never honestly show
  * anything: a pillar-weighted balance score needs user-set targets that
- * don't exist yet (PRODUCT_BLUEPRINT.md §13). These three numbers are real
+ * don't exist yet (PRODUCT_BLUEPRINT.md §13). These four numbers are real
  * every single day — no trend, no percentage, no invented comparison to
- * "last week", just what actually happened today.
+ * "last week", just what actually happened (or is actually left) today.
  */
 function TodayProgressStrip() {
-  const { todayTasks, completedCount, status: taskStatus } = useTasks();
+  const { tasks, todayTasks, completedCount, status: taskStatus } = useTasks();
   const { sessions, status: sessionStatus } = useSessions();
   const { isCompletedToday, status: habitStatus } = useHabits();
   const now = useNow();
@@ -26,10 +27,14 @@ function TodayProgressStrip() {
   const habitsLogged = SEED_HABITS.filter((habit) => isCompletedToday(habit.id)).length;
   const ready = taskStatus === "ready" && sessionStatus === "ready" && habitStatus === "ready";
 
+  // `CalendarEvent` is still seed-only (Plan's status note, PRODUCT_BLUEPRINT.md
+  // §11) — same factory the Plan week view and WeekStripCard already read.
+  const freeMinutes = now ? freeMinutesForDay(now, createSeedCalendarEvents(now), tasks, sessions, now) : 0;
+
   return (
     <section
       aria-label="Today's progress"
-      className="grid grid-cols-1 gap-4 sm:grid-cols-3"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
     >
       <MetricCard
         label="Tasks done"
@@ -44,6 +49,13 @@ function TodayProgressStrip() {
         unit={ready ? "min" : undefined}
         icon={Clock}
         color="blue"
+      />
+      <MetricCard
+        label="Free today"
+        value={ready ? `${freeMinutes}` : "–"}
+        unit={ready ? "min" : undefined}
+        icon={Hourglass}
+        color="orange"
       />
       <MetricCard
         label="Habits logged"

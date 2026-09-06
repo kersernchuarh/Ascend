@@ -246,6 +246,8 @@ Five primary destinations, plus Settings. Nav count drops by one and fits the mo
 **Renames:** Home → **Today** (names the job), Insights → **Progress** (implies history, sets honest expectations), Tasks → **Work** (accommodates Deliverables + Subjects, not just a checklist).
 **Deletions:** **Calendar** as a standalone destination (absorbed into Plan) and **AI Coach** as a destination (redistributed per §19).
 
+**Status:** Tasks → **Work** shipped in Phase 4; Calendar → **Plan** shipped in Phase 5 (both real destinations now, not `ComingSoon` placeholders). Home → "Today" and Insights → "Progress" have **not** been renamed — the routes and nav labels are still `/` "Home" and `/insights` "Insights"; each rename is deferred to whichever phase actually rebuilds that destination (§9's Home redesign already shipped without the rename, and Insights is still a placeholder), rather than relabeling a screen ahead of the rebuild that would justify its new name.
+
 Only sections whose data is real should appear in the nav. Until a section's data exists, it should not be a visible destination — a placeholder route is a worse experience than a shorter nav.
 
 ---
@@ -353,6 +355,14 @@ A single explainable insight *if and only if* one can be computed from real data
 - **Focus Session is a real route (`/focus`), not a nav item.** Reached via links from Today's Focus rows and the Now panel; adding a permanent nav entry for it was a bigger navigation-model change than this phase called for.
 - **`StudySession.outcome`'s "stored, not derived" design (§18.1) held under a second, independent test** — the reset-and-confirm flow on `/focus` calls the identical `finalizeSession` logic the old Study Timer card used, and a live abandoned-session test showed wall-clock drift again pushing `actualEnd` past `plannedEnd` while the explicit stored `outcome` stayed correct regardless. Confirms §18.1's fix generalizes, rather than having been a one-off patch.
 
+### 9.4 Phase 5 Home integration record
+
+The free-time engine (§11, §16) landed this pass, and §9.3's "not built this pass" note above is partially superseded: Home now surfaces one real number from it, deliberately not the full risk-strip/timeline redesign §9.2 describes.
+
+**What shipped:** `TodayProgressStrip` gained a fourth metric, **Free today** — real minutes remaining in the waking window, computed by `domain/plan.freeMinutesForDay`, subtracting today's fixed events, already-logged sessions, and scheduled-but-incomplete task blocks. `TodaysFocusCard` gained a conditional warning line, shown *only* when today's still-outstanding scheduled tasks' total `estimateMinutes` exceeds that same free-minutes figure ("Today's plan needs 2h, but only 1h is free") — an honest, absent-by-default flag, never a fabricated fit score.
+
+**Not built this pass, and why:** the deadline risk strip and live now-line timeline from §9.2 still don't exist on Home. The new `workloadRisk` engine (§11) is real and tested, but surfacing it on Home as a redesigned risk strip is a Home information-architecture change this phase's scope didn't call for — it now lives on `/plan`'s "At risk" panel instead. §9.2 remains the eventual target.
+
 ---
 
 ## 10. Tasks specification (`Work`)
@@ -369,7 +379,7 @@ A single explainable insight *if and only if* one can be computed from real data
 
 **Must NOT contain:** week scheduling UI (that's Plan), habit data, analytics beyond per-deliverable progress.
 
-**Critical behaviours currently missing:** creation, editing, deletion, estimates, subject grouping, deliverable→task linkage, and `completedAt`. Today the only task behaviour is toggling `done` — which is why the app cannot answer any question about work.
+**Status (Phase 4, shipped):** `/work` replaces the old placeholder. Real, persisted CRUD for `Subject`/`Deliverable`/`Task`; subject grouping with an "Unassigned" fallback; deliverable→task nesting; per-deliverable logged minutes and task-completion count; deleting a Subject or Deliverable unlinks (never cascade-deletes) its children. **Still missing:** edit-in-place for an existing deliverable/task (create/toggle/delete only — no rename/re-date UI yet), a picker to log a Focus Session directly against a deliverable (only via an associated task), and onboarding distinct from seed data.
 
 **Estimates deserve emphasis:** capturing `estimateMinutes` and comparing it to logged session time produces *estimate drift*, one of the most genuinely useful and least common features available here — and it directly addresses this user's defining cognitive bias (§2).
 
@@ -390,6 +400,14 @@ A single explainable insight *if and only if* one can be computed from real data
 **Must NOT contain:** invitations, sharing, external calendar sync (v1), event colours competing with pillar identity, or analytics.
 
 **The free-time engine is the keystone** and is entirely deterministic: `free(day) = waking hours − fixed events − quiet hours − already-logged sessions`. Risk (§9.2), plan proposals, and "you have 2h free tonight" all depend on it. It should be a pure, unit-tested function in `src/domain/` — not a React concern.
+
+**Status (Phase 5, shipped):** `/plan` replaces the old `/calendar` placeholder. The free-time engine (`domain/plan.ts`) is real: `wakingWindow`/`mergeIntervals`/`freeIntervals` (the interval-merge/subtract primitives), `freeMinutesForDay`/`freeBlocksForDay` (a day's free minutes and actual open gaps), `remainingEffortMinutes` and `workloadRisk` (the effort-vs-free-time `risk()` this section describes — deliberately named differently from §16's time-only `deadlineRisk` so the two are never conflated), and `dayHasConflict`. The week view shows real fixed events, due-that-day deliverable markers, scheduled tasks, a real free-minutes figure per day, and a conflict flag; an "At risk" panel lists deliverables whose `workloadRisk` needs attention, each with its own one-line real derivation. No timezone handling, per this section's own scope (unchanged).
+
+**Deliberately not built this pass, and why:**
+- **No `CalendarEvent` CRUD.** It stays exactly what it was (a read-only seed factory) — entering recurring commitments, and placing/moving/resizing sessions, is a materially larger surface (forms, drag/resize, validation) this phase's "deterministic planning foundation first" framing didn't call for. `Task.scheduledFor` + `estimateMinutes` together stand in for "planned session" (no new entity), which is what the week view actually reads.
+- **No "Plan my week" proposal.** That's explicitly AI/rules-planning territory this phase excluded.
+- **`freeMinutesUntil`'s projection is capped at `FREE_TIME_HORIZON_DAYS` (14 days) and disclosed, not silently wrong** — `CalendarEvent` has no `recurrenceRule` yet, so a day beyond the currently-seeded week has no fixed-event data to subtract, which would otherwise overstate how much free time is really available that far out.
+- **`workloadRisk` returns `"no-estimate"` (excluded from the "at risk" list) rather than guessing** when a deliverable has no `estimateMinutes` — there is nothing honest to compare against, so silence beats a fabricated risk level.
 
 **Deliberate simplification:** no timezone handling in v1 (single-user, single locale) — but store ISO datetimes so it remains possible.
 
@@ -495,19 +513,21 @@ Every number visible in the UI should trace to exactly one entry in this table. 
 
 **Time handling:** store ISO 8601; treat "today" as a function of an **injectable clock** so derivations are testable and the UI can't drift. A `useNow(granularity)` hook drives the now-line and the live timer.
 
-**What's actually implemented (Phases 1-2), as distinct from the planned catalogue above** — all pure, unit-tested, no React:
+**What's actually implemented (Phases 1-5), as distinct from the planned catalogue above** — all pure, unit-tested, no React:
 
 | Function | File | Note |
 | --- | --- | --- |
 | `isDueToday`, `isOverdue`, `daysUntilDue`, `remainingMinutes` | `domain/time.ts` | |
-| `deadlineRisk` | `domain/time.ts` | Time-proximity only — **not** the `risk(deliverable)` row above, which needs `freeTime` (unbuilt). Named differently on purpose so the two aren't mistaken for each other. |
-| `completionRate`, `scheduleConflict`, `sortByIsoDate` | `domain/time.ts` | `completionRate` has no consumer yet — built for §10/§13, ready when needed. |
-| `startOfDay`, `endOfDay`, `startOfWeek`, `isSameDay`, `addDays`, `addMinutes`, `toIsoDateLocal` | `domain/time.ts` | Calendar-day arithmetic; `toIsoDateLocal` exists specifically because a UTC-based date string is wrong for part of the evening in positive-UTC-offset zones (§18.1). |
+| `deadlineRisk` | `domain/time.ts` | Time-proximity only — still deliberately distinct from `workloadRisk` below (§11), even though `freeTime` now exists, so a due-soon badge and an effort-aware risk signal are never mistaken for the same thing. |
+| `completionRate`, `scheduleConflict`, `sortByIsoDate` | `domain/time.ts` | `completionRate` has no consumer yet — built for §13, ready when needed. `scheduleConflict` now powers `domain/plan.dayHasConflict`. |
+| `startOfDay`, `endOfDay`, `startOfWeek`, `isSameDay`, `addDays`, `addMinutes`, `toIsoDateLocal`, `fromIsoDateLocal` | `domain/time.ts` | Calendar-day arithmetic; `toIsoDateLocal` exists specifically because a UTC-based date string is wrong for part of the evening in positive-UTC-offset zones (§18.1); `fromIsoDateLocal` is its inverse, for parsing `<input type="date">` values without the same UTC-midnight bug. |
 | `totalFocusedMinutes`, `sessionsOnDay`, `weeklyActivity` | `domain/metrics.ts` | Session-derived; `weeklyActivity` has no UI consumer yet (ready for Progress). |
 | `habitStreak`, `weeklyCompletionGrid` | `domain/metrics.ts` | Habit-derived; power Home's habit summary (§9.3). |
 | `isMeaningfulSessionDuration` | `domain/metrics.ts` | The ≥60s-real-effort misclick filter for recording a session at all. |
+| `effectiveDueAt`, `deliverableTaskProgress`, `loggedMinutesForDeliverable`, `workSummary`, and other Subject/Deliverable/Task rollups | `domain/work.ts` | Phase 4 — power `/work` and Home's Upcoming card/backlog picker. |
+| `freeMinutesForDay`, `freeBlocksForDay`, `freeMinutesUntil`, `remainingEffortMinutes`, `workloadRisk`, `dayHasConflict` | `domain/plan.ts` | Phase 5 — the `freeTime`/`remainingEffort`/`risk(deliverable)` rows above, now real. See §11's status note for exact names and disclosed limitations (horizon cap, no `CalendarEvent` recurrence). |
 
-Not implemented, and not planned until the row's own prerequisite exists: `freeTime`, `remainingEffort`, `risk(deliverable)`, `nextBestAction`, `adherence`, `estimateDrift`, `pillarBalance` — each needs Subjects/Deliverables, Sessions at volume, or a free-time engine that don't exist yet.
+Not implemented, and not planned until the row's own prerequisite exists: `nextBestAction`, `adherence`, `estimateDrift`, `pillarBalance` — each needs a rules/AI layer, Habit cadence, or Sessions at volume that don't exist yet.
 
 ---
 
@@ -796,7 +816,7 @@ multi-user/teams/classrooms · parent or teacher visibility · social features �
 
 Eight phases. Ordered strictly by dependency, and deliberately front-loaded with non-visual work — the first two phases add almost no new UI, which is the point. Phases 1–3 are the ones that convert the prototype into a product.
 
-**Status: Phases 1-2 shipped, with real scope divergence from the plan below — not a 1:1 match, by deliberate choice each time rather than drift.** Actual Phase 1 (`domain/`, real dates) shipped *without* `Subject`/`Deliverable` — deferred whole to Phase 4, since nothing yet needs them and inventing them early would have been schema ahead of a consumer. Actual Phase 2 shipped persistence *and* Sessions/Habits together (this roadmap splits them into Phases 2 and 3), but *without* `UserPreferences`, a Settings page, export/import, error boundaries, or a toast/undo layer — none had anywhere to live yet (no Settings surface) or a concrete trigger (no error UI has ever needed to fire). A third pass then rebuilt Home entirely (not separately planned below — closest to Phase 6, done earlier because direct product input called for it). Each divergence is documented where it happened: §9.3 (Home), §18.1 (persistence/Sessions/Habits), §16 (what's actually implemented vs. planned), §25 (per-gap resolution status). Treat the phase descriptions below as the ordering logic and acceptance bar, not a literal changelog of what shipped when.
+**Status: Phases 1-5 shipped (by actual scope, not this roadmap's numbering — see below), with real, deliberate divergence from the plan at every step, not drift.** Actual Phase 1 (`domain/`, real dates) shipped *without* `Subject`/`Deliverable` — deferred whole to a later Work phase, since nothing yet needed them and inventing them early would have been schema ahead of a consumer. Actual Phase 2 shipped persistence *and* Sessions/Habits together (this roadmap splits them into Phases 2 and 3), but *without* `UserPreferences`, a Settings page, export/import, error boundaries, or a toast/undo layer — none had anywhere to live yet (no Settings surface) or a concrete trigger (no error UI has ever needed to fire). A third pass then rebuilt Home entirely (not separately planned below — closest to this roadmap's Phase 6, done earlier because direct product input called for it). A fourth pass shipped `Subject`/`Deliverable`/`Task` CRUD as this roadmap's Phase 4 describes, at `/work`. A fifth pass shipped the free-time engine and week view as this roadmap's Phase 5 describes, at `/plan` — *without* `CalendarEvent` CRUD, drag/resize sessions, or a rules-based "Plan my week" proposal, each a materially larger surface this pass's "deterministic foundation first" framing didn't call for. Each divergence is documented where it happened: §9.3-§9.4 (Home), §18.1 (persistence/Sessions/Habits), §10 (Work), §11 (Plan), §16 (what's actually implemented vs. planned), §25 (per-gap resolution status). Treat the phase descriptions below as the ordering logic and acceptance bar, not a literal changelog of what shipped when.
 
 ---
 

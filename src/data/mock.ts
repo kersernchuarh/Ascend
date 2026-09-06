@@ -19,7 +19,7 @@ export type NavItem = {
 export const SIDEBAR_NAV: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
   { label: "Work", href: "/work", icon: CheckSquare },
-  { label: "Calendar", href: "/calendar", icon: Calendar },
+  { label: "Plan", href: "/plan", icon: Calendar },
   { label: "Habits", href: "/habits", icon: Repeat },
   { label: "Insights", href: "/insights", icon: BarChart3 },
   { label: "AI Coach", href: "/ai", icon: Sparkles },
@@ -32,7 +32,7 @@ export const SIDEBAR_FOOTER_NAV: NavItem[] = [
 export const MOBILE_NAV: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
   { label: "Work", href: "/work", icon: CheckSquare },
-  { label: "Calendar", href: "/calendar", icon: Calendar },
+  { label: "Plan", href: "/plan", icon: Calendar },
   { label: "AI", href: "/ai", icon: Sparkles },
   { label: "More", href: "/more", icon: MoreHorizontal },
 ];
@@ -42,7 +42,7 @@ export const MOBILE_NAV: NavItem[] = [
 export const ROUTE_TITLES: Record<string, string> = {
   "/": "Home",
   "/work": "Work",
-  "/calendar": "Calendar",
+  "/plan": "Plan",
   "/habits": "Habits",
   "/insights": "Insights",
   "/ai": "AI Coach",
