@@ -104,14 +104,51 @@ export type Deliverable = {
   completedAt?: string;
 };
 
-/** A fixed, non-movable block of time — a class, a CCA, an appointment. */
+/**
+ * A fixed, non-movable block of time — a class, a CCA, an appointment.
+ * Deliberately modeled as **inherently weekly-recurring**, not an absolute
+ * datetime with an optional `recurrenceRule` bolted on: a real fixed
+ * commitment (school hours, a standing CCA) repeats every week, and forcing
+ * a user to re-enter it every week just because full recurrence rules
+ * (RRULE-style exceptions, date ranges) weren't built would defeat the
+ * point of entering it at all. A one-off, single-date commitment already
+ * has a home — a `Task` with `scheduledFor` + `estimateMinutes` — so this
+ * type doesn't need to cover that case.
+ */
 export type CalendarEvent = {
   id: string;
   title: string;
-  /** ISO datetime the event starts. */
-  startAt: string;
-  /** ISO datetime the event ends. */
-  endAt: string;
+  kind: "class" | "cca" | "appointment" | "personal";
+  /** 0=Sunday..6=Saturday, matching `Date.getDay()`. */
+  dayOfWeek: number;
+  /** Minutes since local midnight the event starts. */
+  startMinutes: number;
+  durationMinutes: number;
+  createdAt: string;
+};
+
+/**
+ * The small set of preferences that materially change the free-time engine
+ * (blueprint §15) — deliberately minimal: no `weekStartsOn`, `pillarTargets`,
+ * `subjects[]`, or `onboardingCompletedAt` yet, none of which has a
+ * consumer built. A true singleton (one row, not a collection), stored
+ * through the same `Repository<T>` used everywhere else with a fixed id
+ * rather than inventing a second persistence primitive for one object.
+ */
+export type UserPreferences = {
+  id: "singleton";
+  /** Hour (0-23) the waking window starts/ends — `domain/plan.wakingWindow`'s
+   *  real input, replacing what were hardcoded constants. */
+  wakingStartHour: number;
+  wakingEndHour: number;
+  /** Optional — unset by default. Asserting an implicit quiet-hours cutoff
+   *  the user never chose would be exactly the fabricated-default mistake
+   *  this product has avoided everywhere else (see `Habit.cadence`'s docs
+   *  for the same reasoning). */
+  quietHoursStart?: number;
+  quietHoursEnd?: number;
+  /** Minutes — replaces the hardcoded `STUDY_SESSION_SECONDS`. */
+  sessionLengthMinutes: number;
 };
 
 /**

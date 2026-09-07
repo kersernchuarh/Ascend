@@ -16,8 +16,9 @@ import { useDeliverables } from "@/state/deliverable-context";
 import { useTasks } from "@/state/task-context";
 import { useSessions } from "@/state/session-context";
 import { useHabits } from "@/state/habit-context";
+import { useCalendarEvents } from "@/state/calendar-event-context";
+import { usePreferences } from "@/state/preferences-context";
 import { useNow } from "@/domain/use-now";
-import { createSeedCalendarEvents } from "@/data/dashboard";
 import { atRiskDeliverables } from "@/domain/plan";
 import { estimateAccuracy, weekInReview, weeklyFocusHabitJuxtaposition, workloadByPillar } from "@/domain/progress";
 import { workSummary } from "@/domain/work";
@@ -37,6 +38,8 @@ export default function ProgressPage() {
   const { sessions, status: sessionStatus } = useSessions();
   const { habits, logs, status: habitStatus, isCompletedToday, toggleHabitToday, toggleHabitOnDate, updateHabit, setHabitArchived } =
     useHabits();
+  const { events, status: eventStatus } = useCalendarEvents();
+  const { preferences, status: prefsStatus } = usePreferences();
   const now = useNow();
 
   const ready =
@@ -44,14 +47,15 @@ export default function ProgressPage() {
     taskStatus === "ready" &&
     sessionStatus === "ready" &&
     habitStatus === "ready" &&
+    eventStatus === "ready" &&
+    prefsStatus === "ready" &&
     now != null;
 
-  const events = useMemo(() => (now ? createSeedCalendarEvents(now) : []), [now]);
   const review = useMemo(() => (now ? weekInReview(sessions, tasks, now) : null), [sessions, tasks, now]);
   const summary = useMemo(() => (now ? workSummary(tasks, deliverables, now) : null), [tasks, deliverables, now]);
   const atRisk = useMemo(
-    () => (now ? atRiskDeliverables(deliverables, tasks, sessions, events, now) : []),
-    [deliverables, tasks, sessions, events, now]
+    () => (now ? atRiskDeliverables(deliverables, tasks, sessions, events, now, preferences) : []),
+    [deliverables, tasks, sessions, events, preferences, now]
   );
   const pillarWorkload = useMemo(() => workloadByPillar(tasks, deliverables), [tasks, deliverables]);
   const accuracy = useMemo(() => estimateAccuracy(deliverables, tasks, sessions), [deliverables, tasks, sessions]);
@@ -94,7 +98,14 @@ export default function ProgressPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <h3 className="text-h3 text-foreground">At risk</h3>
-                <AtRiskList deliverables={atRisk} tasks={tasks} sessions={sessions} events={events} now={now ?? new Date()} />
+                <AtRiskList
+                  deliverables={atRisk}
+                  tasks={tasks}
+                  sessions={sessions}
+                  events={events}
+                  now={now ?? new Date()}
+                  prefs={preferences}
+                />
               </div>
               <div className="flex flex-col gap-2">
                 <h3 className="text-h3 text-foreground">Remaining work by pillar</h3>

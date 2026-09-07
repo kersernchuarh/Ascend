@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
+import { PreferencesProvider } from "@/state/preferences-context";
+import { CalendarEventProvider } from "@/state/calendar-event-context";
 import { SubjectProvider } from "@/state/subject-context";
 import { DeliverableProvider } from "@/state/deliverable-context";
 import { TaskProvider } from "@/state/task-context";
@@ -18,30 +20,42 @@ type AppShellProps = {
 // across client-side navigation — so providers mounted here keep their state
 // when the user moves between pages. Persistence (Phase 2) is what makes
 // that state survive a full reload too, not just navigation.
+//
+// Provider nesting is 8 deep as of this phase (Sidebar → Preferences →
+// CalendarEvent → Subject → Deliverable → Task → Session → Habit) — past
+// the "~4 levels" reconsideration threshold §17 named back at Phase 2. Not
+// addressed here: this phase's scope is CalendarEvent CRUD and Preferences,
+// not a store-architecture rewrite (flagged again in the Phase 7 checkpoint,
+// §28, as real, disclosed technical debt rather than something to fix
+// incidentally while adding an unrelated feature).
 function AppShell({ children }: AppShellProps) {
   return (
     <SidebarProvider>
-      <SubjectProvider>
-        <DeliverableProvider>
-          <TaskProvider>
-            <SessionProvider>
-              <HabitProvider>
-                <div className="flex min-h-screen w-full">
-                  <Sidebar />
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <Topbar />
-                    <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
-                      <div className="mx-auto w-full max-w-[1440px]">{children}</div>
-                    </main>
-                  </div>
-                </div>
-                <MobileBottomNav />
-                <FloatingAiButton />
-              </HabitProvider>
-            </SessionProvider>
-          </TaskProvider>
-        </DeliverableProvider>
-      </SubjectProvider>
+      <PreferencesProvider>
+        <CalendarEventProvider>
+          <SubjectProvider>
+            <DeliverableProvider>
+              <TaskProvider>
+                <SessionProvider>
+                  <HabitProvider>
+                    <div className="flex min-h-screen w-full">
+                      <Sidebar />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <Topbar />
+                        <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
+                          <div className="mx-auto w-full max-w-[1440px]">{children}</div>
+                        </main>
+                      </div>
+                    </div>
+                    <MobileBottomNav />
+                    <FloatingAiButton />
+                  </HabitProvider>
+                </SessionProvider>
+              </TaskProvider>
+            </DeliverableProvider>
+          </SubjectProvider>
+        </CalendarEventProvider>
+      </PreferencesProvider>
     </SidebarProvider>
   );
 }

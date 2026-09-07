@@ -1,5 +1,5 @@
-import type { Task, Deliverable, CalendarEvent, Habit, Subject } from "@/domain/types";
-import { addDays, endOfDay, startOfDay, startOfWeek } from "@/domain/time";
+import type { Task, Deliverable, CalendarEvent, Habit, Subject, UserPreferences } from "@/domain/types";
+import { addDays, endOfDay, startOfDay } from "@/domain/time";
 
 /**
  * Mock data, migrated onto the canonical domain model (PRODUCT_BLUEPRINT.md
@@ -172,21 +172,34 @@ export function createSeedDeliverables(now: Date): Deliverable[] {
   ];
 }
 
+/**
+ * Present-state demo fixed commitments — seeded once by
+ * `CalendarEventProvider` on a genuinely first-ever run, same pattern as
+ * every other seed factory. Weekly-recurring by construction (`dayOfWeek` +
+ * minute offsets — see `CalendarEvent`'s docs), so unlike the old
+ * `startAt`/`endAt` seed this doesn't need `now` to place events in "this
+ * week" — it only uses `now` for a realistic `createdAt`.
+ */
 export function createSeedCalendarEvents(now: Date): CalendarEvent[] {
-  const monday = startOfWeek(now);
-  const at = (dayOffset: number, hours: number, minutes: number): string => {
-    const d = addDays(monday, dayOffset);
-    d.setHours(hours, minutes, 0, 0);
-    return d.toISOString();
-  };
+  const createdAt = atDaysFromNow(now, -30, 9, 0);
   return [
-    { id: "c1", title: "Morning classes", startAt: at(0, 8, 0), endAt: at(0, 15, 0) },
-    { id: "c2", title: "Chemistry practical", startAt: at(2, 8, 0), endAt: at(2, 10, 0) },
-    { id: "c3", title: "Debate club", startAt: at(2, 16, 0), endAt: at(2, 17, 30) },
-    { id: "c4", title: "Morning classes", startAt: at(3, 8, 0), endAt: at(3, 15, 0) },
-    { id: "c5", title: "Morning classes", startAt: at(4, 8, 0), endAt: at(4, 15, 0) },
-    { id: "c6", title: "Study group", startAt: at(4, 16, 0), endAt: at(4, 17, 0) },
+    { id: "c1", title: "Morning classes", kind: "class", dayOfWeek: 1, startMinutes: 8 * 60, durationMinutes: 7 * 60, createdAt },
+    { id: "c2", title: "Chemistry practical", kind: "class", dayOfWeek: 3, startMinutes: 8 * 60, durationMinutes: 2 * 60, createdAt },
+    { id: "c3", title: "Debate club", kind: "cca", dayOfWeek: 3, startMinutes: 16 * 60, durationMinutes: 90, createdAt },
+    { id: "c4", title: "Morning classes", kind: "class", dayOfWeek: 4, startMinutes: 8 * 60, durationMinutes: 7 * 60, createdAt },
+    { id: "c5", title: "Morning classes", kind: "class", dayOfWeek: 5, startMinutes: 8 * 60, durationMinutes: 7 * 60, createdAt },
+    { id: "c6", title: "Study group", kind: "personal", dayOfWeek: 5, startMinutes: 16 * 60, durationMinutes: 60, createdAt },
   ];
+}
+
+/** The one `UserPreferences` row, seeded once with the same reasonable
+ *  defaults that used to be hardcoded constants (`domain/plan`'s old
+ *  `WAKING_START_HOUR`/`WAKING_END_HOUR`, `STUDY_SESSION_SECONDS`) — real,
+ *  editable Settings state from that point forward. Quiet hours start unset:
+ *  asserting a bedtime cutoff nobody chose would be the same fabricated-
+ *  default mistake `Habit.cadence` avoided. */
+export function createDefaultPreferences(): UserPreferences {
+  return { id: "singleton", wakingStartHour: 7, wakingEndHour: 23, sessionLengthMinutes: 45 };
 }
 
 /**
@@ -220,5 +233,3 @@ export const AI_FUTURE_ACTIONS: string[] = [
   "What should I do next?",
   "Review my week",
 ];
-
-export const STUDY_SESSION_SECONDS = 45 * 60;

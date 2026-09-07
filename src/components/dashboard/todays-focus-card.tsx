@@ -11,10 +11,11 @@ import { AddExistingTaskRow } from "@/components/dashboard/add-existing-task-row
 import { useTasks } from "@/state/task-context";
 import { useDeliverables } from "@/state/deliverable-context";
 import { useSessions } from "@/state/session-context";
+import { useCalendarEvents } from "@/state/calendar-event-context";
+import { usePreferences } from "@/state/preferences-context";
 import { useNow } from "@/domain/use-now";
 import { isDueToday } from "@/domain/time";
 import { freeMinutesForDay } from "@/domain/plan";
-import { createSeedCalendarEvents } from "@/data/dashboard";
 import { formatDuration } from "@/lib/format-date";
 import type { PillarId } from "@/lib/pillars";
 
@@ -32,6 +33,8 @@ function TodaysFocusCard() {
   } = useTasks();
   const { deliverables } = useDeliverables();
   const { sessions } = useSessions();
+  const { events } = useCalendarEvents();
+  const { preferences } = usePreferences();
   const now = useNow();
 
   // Same shared `DeliverableProvider` state Work reads and writes — editing
@@ -66,10 +69,9 @@ function TodaysFocusCard() {
       .filter((task) => !task.completedAt)
       .reduce((sum, task) => sum + (task.estimateMinutes ?? 0), 0);
     if (plannedMinutes === 0) return null;
-    const events = createSeedCalendarEvents(now);
-    const freeMinutes = freeMinutesForDay(now, events, allTasks, sessions, now);
+    const freeMinutes = freeMinutesForDay(now, events, allTasks, sessions, now, preferences);
     return plannedMinutes > freeMinutes ? { plannedMinutes, freeMinutes } : null;
-  }, [tasks, allTasks, sessions, now, status]);
+  }, [tasks, allTasks, sessions, events, preferences, now, status]);
 
   function handleAdd(title: string, pillar: PillarId) {
     if (!now) return;

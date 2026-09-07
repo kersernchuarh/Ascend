@@ -3,6 +3,7 @@ import {
   FREE_TIME_HORIZON_DAYS,
   atRiskDeliverables,
   busyIntervalsForDay,
+  calendarEventOccurrenceOn,
   dayHasConflict,
   freeBlocksForDay,
   freeIntervals,
@@ -14,14 +15,17 @@ import {
   wakingWindow,
   weekDays,
   workloadRisk,
+  type FreeTimePreferences,
 } from "./plan";
 import type { CalendarEvent, Deliverable, StudySession, Task } from "./types";
 
 // Fri 4 Sep 2026 is used throughout the rest of the domain test suite as the
 // reference "now" — reused here so day-of-week reasoning stays consistent.
-const NOW = new Date(2026, 8, 4, 12, 0, 0); // Fri, 12:00 local
+const NOW = new Date(2026, 8, 4, 12, 0, 0); // Fri, 12:00 local, getDay() === 5
 const TODAY = new Date(2026, 8, 4);
-const TOMORROW = new Date(2026, 8, 5);
+const TOMORROW = new Date(2026, 8, 5); // Sat, getDay() === 6
+
+const PREFS: FreeTimePreferences = { wakingStartHour: 7, wakingEndHour: 23 };
 
 function iso(year: number, month: number, day: number, hours = 0, minutes = 0): string {
   return new Date(year, month, day, hours, minutes).toISOString();
@@ -61,15 +65,48 @@ function session(overrides: Partial<StudySession> = {}): StudySession {
   };
 }
 
+// Defaults to Friday 8:00-9:00 — TODAY/NOW's day of week.
 function event(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
-  return { id: "c1", title: "Class", startAt: iso(2026, 8, 4, 8, 0), endAt: iso(2026, 8, 4, 9, 0), ...overrides };
+  return {
+    id: "c1",
+    title: "Class",
+    kind: "class",
+    dayOfWeek: 5,
+    startMinutes: 8 * 60,
+    durationMinutes: 60,
+    createdAt: iso(2026, 8, 1, 9, 0),
+    ...overrides,
+  };
 }
 
+describe("calendarEventOccurrenceOn", () => {
+  it("is undefined when the day doesn't match the event's day of week", () => {
+    expect(calendarEventOccurrenceOn(event({ dayOfWeek: 1 }), TODAY)).toBeUndefined();
+  });
+
+  it("computes the real start/end for a matching day", () => {
+    const occurrence = calendarEventOccurrenceOn(event({ startMinutes: 8 * 60, durationMinutes: 90 }), TODAY);
+    expect(occurrence).toEqual({ startAt: iso(2026, 8, 4, 8, 0), endAt: iso(2026, 8, 4, 9, 30) });
+  });
+
+  it("recurs identically on the same weekday in a different week", () => {
+    const nextFriday = new Date(2026, 8, 11); // also getDay() === 5
+    const occurrence = calendarEventOccurrenceOn(event(), nextFriday);
+    expect(occurrence).toEqual({ startAt: iso(2026, 8, 11, 8, 0), endAt: iso(2026, 8, 11, 9, 0) });
+  });
+});
+
 describe("wakingWindow", () => {
-  it("spans 7am to 11pm local on the given day", () => {
-    const w = wakingWindow(TODAY);
+  it("spans the configured waking hours on the given day", () => {
+    const w = wakingWindow(TODAY, PREFS);
     expect(new Date(w.startAt).getHours()).toBe(7);
     expect(new Date(w.endAt).getHours()).toBe(23);
+  });
+
+  it("respects a different configured window", () => {
+    const w = wakingWindow(TODAY, { wakingStartHour: 6, wakingEndHour: 22 });
+    expect(new Date(w.startAt).getHours()).toBe(6);
+    expect(new Date(w.endAt).getHours()).toBe(22);
   });
 });
 
@@ -163,14 +200,30 @@ describe("busyIntervalsForDay / dayHasConflict", () => {
     const events = [event()];
     const sessions = [session()];
     const tasks = [task({ scheduledFor: iso(2026, 8, 4, 14, 0), estimateMinutes: 30 })];
-    expect(busyIntervalsForDay(TODAY, events, tasks, sessions)).toHaveLength(3);
+    expect(busyIntervalsForDay(TODAY, events, tasks, sessions, PREFS)).toHaveLength(3);
   });
 
   it("excludes a completed task's block", () => {
     const tasks = [
       task({ scheduledFor: iso(2026, 8, 4, 14, 0), estimateMinutes: 30, completedAt: iso(2026, 8, 4, 14, 30) }),
     ];
-    expect(busyIntervalsForDay(TODAY, [], tasks, [])).toEqual([]);
+    expect(busyIntervalsForDay(TODAY, [], tasks, [], PREFS)).toEqual([]);
+  });
+
+  it("includes quiet hours as a busy interval when set", () => {
+    const prefsWithQuiet: FreeTimePreferences = { ...PREFS, quietHoursStart: 18, quietHoursEnd: 19 };
+    expect(busyIntervalsForDay(TODAY, [], [], [], prefsWithQuiet)).toEqual([
+      { startAt: iso(2026, 8, 4, 18, 0), endAt: iso(2026, 8, 4, 19, 0) },
+    ]);
+  });
+
+  it("omits quiet hours when unset", () => {
+    expect(busyIntervalsForDay(TODAY, [], [], [], PREFS)).toEqual([]);
+  });
+
+  it("ignores a reversed/empty quiet-hours range rather than guessing", () => {
+    const prefsReversed: FreeTimePreferences = { ...PREFS, quietHoursStart: 19, quietHoursEnd: 18 };
+    expect(busyIntervalsForDay(TODAY, [], [], [], prefsReversed)).toEqual([]);
   });
 
   it("dayHasConflict is false with no overlaps", () => {
@@ -180,7 +233,7 @@ describe("busyIntervalsForDay / dayHasConflict", () => {
   });
 
   it("dayHasConflict is true when a scheduled task overlaps a fixed event", () => {
-    const events = [event({ startAt: iso(2026, 8, 4, 9, 0), endAt: iso(2026, 8, 4, 10, 0) })];
+    const events = [event({ startMinutes: 9 * 60, durationMinutes: 60 })];
     const tasks = [task({ scheduledFor: iso(2026, 8, 4, 9, 30), estimateMinutes: 30 })];
     expect(dayHasConflict(TODAY, events, tasks)).toBe(true);
   });
@@ -192,22 +245,32 @@ describe("busyIntervalsForDay / dayHasConflict", () => {
 
 describe("freeMinutesForDay / freeBlocksForDay", () => {
   it("is the full 16-hour waking window for a day with nothing on it", () => {
-    expect(freeMinutesForDay(TOMORROW, [], [], [], NOW)).toBe(16 * 60);
+    expect(freeMinutesForDay(TOMORROW, [], [], [], NOW, PREFS)).toBe(16 * 60);
   });
 
   it("subtracts a fixed event's duration", () => {
-    const events = [event({ startAt: iso(2026, 8, 5, 9, 0), endAt: iso(2026, 8, 5, 10, 0) })];
-    expect(freeMinutesForDay(TOMORROW, events, [], [], NOW)).toBe(16 * 60 - 60);
+    const events = [event({ dayOfWeek: 6, startMinutes: 9 * 60, durationMinutes: 60 })]; // Sat, matches TOMORROW
+    expect(freeMinutesForDay(TOMORROW, events, [], [], NOW, PREFS)).toBe(16 * 60 - 60);
+  });
+
+  it("subtracts quiet hours too", () => {
+    const prefsWithQuiet: FreeTimePreferences = { ...PREFS, quietHoursStart: 18, quietHoursEnd: 19 };
+    expect(freeMinutesForDay(TOMORROW, [], [], [], NOW, prefsWithQuiet)).toBe(16 * 60 - 60);
   });
 
   it("for today, only counts the window remaining from now — not the whole day", () => {
     // NOW is 12:00; waking window is 7:00-23:00 (16h). Remaining = 11h = 660 min.
-    expect(freeMinutesForDay(TODAY, [], [], [], NOW)).toBe(11 * 60);
+    expect(freeMinutesForDay(TODAY, [], [], [], NOW, PREFS)).toBe(11 * 60);
+  });
+
+  it("respects a narrower configured waking window", () => {
+    const narrowPrefs: FreeTimePreferences = { wakingStartHour: 8, wakingEndHour: 20 };
+    expect(freeMinutesForDay(TOMORROW, [], [], [], NOW, narrowPrefs)).toBe(12 * 60);
   });
 
   it("freeBlocksForDay returns the actual open gaps", () => {
-    const events = [event({ startAt: iso(2026, 8, 5, 9, 0), endAt: iso(2026, 8, 5, 10, 0) })];
-    const blocks = freeBlocksForDay(TOMORROW, events, [], [], NOW);
+    const events = [event({ dayOfWeek: 6, startMinutes: 9 * 60, durationMinutes: 60 })];
+    const blocks = freeBlocksForDay(TOMORROW, events, [], [], NOW, PREFS);
     expect(blocks).toEqual([
       { startAt: iso(2026, 8, 5, 7, 0), endAt: iso(2026, 8, 5, 9, 0) },
       { startAt: iso(2026, 8, 5, 10, 0), endAt: iso(2026, 8, 5, 23, 0) },
@@ -247,14 +310,14 @@ describe("freeMinutesUntil", () => {
   it("clips today to the deadline instant, not the rest of the waking window", () => {
     // NOW is 12:00; deadline is 22:00 the same day -> 10h, not the full 11h remaining today.
     const untilToday = iso(2026, 8, 4, 22, 0);
-    expect(freeMinutesUntil(untilToday, [], [], [], NOW)).toBe(10 * 60);
+    expect(freeMinutesUntil(untilToday, [], [], [], NOW, PREFS)).toBe(10 * 60);
   });
 
   it("sums across multiple days, clipping only the final day to the deadline", () => {
     // Day 1 (today): now(12:00) -> waking end(23:00) = 11h.
     // Day 2 (deadline day): waking start(7:00) -> deadline(22:00) = 15h.
     const untilTomorrow = iso(2026, 8, 5, 22, 0);
-    expect(freeMinutesUntil(untilTomorrow, [], [], [], NOW)).toBe(11 * 60 + 15 * 60);
+    expect(freeMinutesUntil(untilTomorrow, [], [], [], NOW, PREFS)).toBe(11 * 60 + 15 * 60);
   });
 
   it("respects FREE_TIME_HORIZON_DAYS as a real, named cap", () => {
@@ -265,33 +328,33 @@ describe("freeMinutesUntil", () => {
 describe("workloadRisk", () => {
   it("a submitted deliverable is always on-track regardless of timing", () => {
     const d = deliverable({ dueAt: iso(2026, 8, 1, 0, 0), completedAt: iso(2026, 8, 2, 0, 0) });
-    expect(workloadRisk(d, [], [], [], NOW)).toBe("on-track");
+    expect(workloadRisk(d, [], [], [], NOW, PREFS)).toBe("on-track");
   });
 
   it("is overdue once the due date has passed and it isn't submitted", () => {
     const d = deliverable({ dueAt: iso(2026, 8, 1, 0, 0) });
-    expect(workloadRisk(d, [], [], [], NOW)).toBe("overdue");
+    expect(workloadRisk(d, [], [], [], NOW, PREFS)).toBe("overdue");
   });
 
   it("is no-estimate when nothing was ever estimated", () => {
     const d = deliverable({ dueAt: iso(2026, 8, 10, 0, 0) });
-    expect(workloadRisk(d, [], [], [], NOW)).toBe("no-estimate");
+    expect(workloadRisk(d, [], [], [], NOW, PREFS)).toBe("no-estimate");
   });
 
   it("is on-track when remaining effort easily fits in available free time", () => {
     const d = deliverable({ dueAt: iso(2026, 8, 6, 22, 0), estimateMinutes: 30 });
-    expect(workloadRisk(d, [], [], [], NOW)).toBe("on-track");
+    expect(workloadRisk(d, [], [], [], NOW, PREFS)).toBe("on-track");
   });
 
   it("is insufficient-time when remaining effort exceeds all available free time", () => {
     const d = deliverable({ dueAt: iso(2026, 8, 4, 13, 0), estimateMinutes: 10_000 });
-    expect(workloadRisk(d, [], [], [], NOW)).toBe("insufficient-time");
+    expect(workloadRisk(d, [], [], [], NOW, PREFS)).toBe("insufficient-time");
   });
 
   it("is tight when remaining effort uses most (but not all) of the available free time", () => {
     // Free time today from NOW (12:00) to due (13:00) is exactly 60 minutes.
     const d = deliverable({ dueAt: iso(2026, 8, 4, 13, 0), estimateMinutes: 45 });
-    expect(workloadRisk(d, [], [], [], NOW)).toBe("tight");
+    expect(workloadRisk(d, [], [], [], NOW, PREFS)).toBe("tight");
   });
 });
 
@@ -300,7 +363,7 @@ describe("atRiskDeliverables", () => {
     const onTrack = deliverable({ id: "ok", dueAt: iso(2026, 8, 10, 0, 0), estimateMinutes: 30 });
     const noEstimate = deliverable({ id: "unknown", dueAt: iso(2026, 8, 10, 0, 0) });
     const overdue = deliverable({ id: "late", dueAt: iso(2026, 8, 1, 0, 0) });
-    const result = atRiskDeliverables([onTrack, noEstimate, overdue], [], [], [], NOW);
+    const result = atRiskDeliverables([onTrack, noEstimate, overdue], [], [], [], NOW, PREFS);
     expect(result.map((d) => d.id)).toEqual(["late"]);
   });
 });

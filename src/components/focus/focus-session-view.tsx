@@ -6,9 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, Pause, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PillBadge } from "@/components/shared/pill-badge";
-import { STUDY_SESSION_SECONDS } from "@/data/dashboard";
 import { useTasks } from "@/state/task-context";
 import { useSessions } from "@/state/session-context";
+import { usePreferences } from "@/state/preferences-context";
 import { isMeaningfulSessionDuration, sessionsOnDay, totalFocusedMinutes } from "@/domain/metrics";
 import { useNow } from "@/domain/use-now";
 import { formatDuration } from "@/lib/format-date";
@@ -32,9 +32,11 @@ function FocusSessionView() {
 
   const { todayTasks } = useTasks();
   const { sessions, recordSession, status: sessionStatus } = useSessions();
+  const { preferences } = usePreferences();
   const now = useNow();
 
-  const [secondsLeft, setSecondsLeft] = useState(STUDY_SESSION_SECONDS);
+  const sessionLengthSeconds = preferences.sessionLengthMinutes * 60;
+  const [secondsLeft, setSecondsLeft] = useState(sessionLengthSeconds);
   const [isRunning, setIsRunning] = useState(false);
   const [actualStart, setActualStart] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState(taskIdFromUrl);
@@ -43,6 +45,22 @@ function FocusSessionView() {
 
   const availableTasks = todayTasks.filter((task) => !task.completedAt);
   const selectedTask = todayTasks.find((task) => task.id === selectedTaskId);
+
+  // `PreferencesProvider` hydrates asynchronously — `preferencesRepository
+  // .getAll()` is always at least one effect-cycle after first render, even
+  // though the underlying `localStorage` read itself is fast — so a
+  // customized session length is *never* reflected in `secondsLeft`'s
+  // initial value above; this isn't a rare race, it happens on every mount
+  // for anyone who isn't using the 45-minute default. Sync it here, but
+  // only while the timer hasn't actually started (a running/paused
+  // countdown must never jump mid-session just because this effect re-runs).
+  // An intentional exception to the lint rule below, matching the existing
+  // `useNow`/`NowPanel` pattern.
+  useEffect(() => {
+    if (actualStart) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSecondsLeft(sessionLengthSeconds);
+  }, [sessionLengthSeconds, actualStart]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -68,7 +86,7 @@ function FocusSessionView() {
   function finalizeSession(start: string, taskId: string, outcome: "completed" | "abandoned") {
     recordedRef.current = true;
     const plannedEnd = new Date(
-      new Date(start).getTime() + STUDY_SESSION_SECONDS * 1000
+      new Date(start).getTime() + sessionLengthSeconds * 1000
     ).toISOString();
     const session: StudySession = {
       id: crypto.randomUUID(),
@@ -85,9 +103,15 @@ function FocusSessionView() {
 
   const minutes = Math.floor(secondsLeft / 60).toString().padStart(2, "0");
   const seconds = (secondsLeft % 60).toString().padStart(2, "0");
-  const progress = (STUDY_SESSION_SECONDS - secondsLeft) / STUDY_SESSION_SECONDS;
+  const progress = (sessionLengthSeconds - secondsLeft) / sessionLengthSeconds;
   const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
-  const isFresh = secondsLeft === STUDY_SESSION_SECONDS && !actualStart;
+  // `!actualStart` alone is a complete signal: `resetToFresh` always clears
+  // both `actualStart` and `secondsLeft` together, so there's no state where
+  // the session is genuinely fresh but `actualStart` is still set. (Also
+  // deliberately not `secondsLeft === sessionLengthSeconds` — that pairing
+  // broke the moment a customized `sessionLengthSeconds` loaded from
+  // preferences after `secondsLeft`'s initial value was already set.)
+  const isFresh = !actualStart;
 
   function handleToggle() {
     if (!isRunning && !actualStart) {
@@ -98,7 +122,7 @@ function FocusSessionView() {
 
   function handleEndOrReset() {
     if (actualStart && !recordedRef.current) {
-      const elapsedSeconds = STUDY_SESSION_SECONDS - secondsLeft;
+      const elapsedSeconds = sessionLengthSeconds - secondsLeft;
       if (isMeaningfulSessionDuration(elapsedSeconds)) {
         finalizeSession(actualStart, selectedTaskId, "abandoned");
         return; // completedSession now drives the confirmation view
@@ -109,7 +133,7 @@ function FocusSessionView() {
 
   function resetToFresh() {
     setIsRunning(false);
-    setSecondsLeft(STUDY_SESSION_SECONDS);
+    setSecondsLeft(sessionLengthSeconds);
     setActualStart(null);
     recordedRef.current = false;
     setCompletedSession(null);

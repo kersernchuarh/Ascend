@@ -1,6 +1,6 @@
-import { addDays, isOverdue, isSameDay, scheduleConflict, startOfDay, startOfWeek, type Interval } from "./time";
+import { addDays, addMinutes, isOverdue, isSameDay, scheduleConflict, startOfDay, startOfWeek, type Interval } from "./time";
 import { loggedMinutesForDeliverable } from "./work";
-import type { CalendarEvent, Deliverable, StudySession, Task } from "./types";
+import type { CalendarEvent, Deliverable, StudySession, Task, UserPreferences } from "./types";
 
 /**
  * The deterministic free-time / workload engine (PRODUCT_BLUEPRINT.md §11,
@@ -10,18 +10,36 @@ import type { CalendarEvent, Deliverable, StudySession, Task } from "./types";
  * number traces to real entities a caller already has.
  */
 
-/** Placeholder waking-hours default, pending a real `UserPreferences`
- *  surface (blueprint §6.2, §15) — same status as `STUDY_SESSION_SECONDS`
- *  before Settings exists: a reasonable constant, not a fabricated one. */
-export const WAKING_START_HOUR = 7;
-export const WAKING_END_HOUR = 23;
+/** The subset of `UserPreferences` this engine actually reads — a real,
+ *  user-set input now (§15's "make Plan tell the truth" phase), not the
+ *  hardcoded constants this module used before `UserPreferences` existed. */
+export type FreeTimePreferences = Pick<
+  UserPreferences,
+  "wakingStartHour" | "wakingEndHour" | "quietHoursStart" | "quietHoursEnd"
+>;
 
 /** The full waking window for the calendar day `day` falls on. */
-export function wakingWindow(day: Date): Interval {
+export function wakingWindow(day: Date, prefs: FreeTimePreferences): Interval {
   const start = startOfDay(day);
-  start.setHours(WAKING_START_HOUR, 0, 0, 0);
+  start.setHours(prefs.wakingStartHour, 0, 0, 0);
   const end = startOfDay(day);
-  end.setHours(WAKING_END_HOUR, 0, 0, 0);
+  end.setHours(prefs.wakingEndHour, 0, 0, 0);
+  return { startAt: start.toISOString(), endAt: end.toISOString() };
+}
+
+/** `day`'s quiet-hours interval, or `undefined` if none is set or the range
+ *  is empty/reversed. Deliberately same-calendar-day only — no support for
+ *  a range that wraps past midnight, which "minimal preferences" doesn't
+ *  need: quiet hours are for excluding a block *within* waking hours (a
+ *  family dinner, a fixed wind-down time), not for redefining sleep, which
+ *  the waking window itself already does. */
+function quietHoursOn(day: Date, prefs: FreeTimePreferences): Interval | undefined {
+  if (prefs.quietHoursStart == null || prefs.quietHoursEnd == null) return undefined;
+  const start = startOfDay(day);
+  start.setHours(prefs.quietHoursStart, 0, 0, 0);
+  const end = startOfDay(day);
+  end.setHours(prefs.quietHoursEnd, 0, 0, 0);
+  if (end.getTime() <= start.getTime()) return undefined;
   return { startAt: start.toISOString(), endAt: end.toISOString() };
 }
 
@@ -103,20 +121,31 @@ export function taskWorkBlock(task: Task): Interval | undefined {
   return { startAt: start.toISOString(), endAt: end.toISOString() };
 }
 
-/** Every real, time-consuming interval on `day`: fixed `CalendarEvent`s,
- *  `StudySession`s that actually happened, and scheduled-but-incomplete
- *  task blocks. Not merged — callers needing the union should merge
- *  themselves (`mergeIntervals`); `dayConflicts` below needs them unmerged
+/** The real occurrence of a weekly-recurring `CalendarEvent` on `day`, or
+ *  `undefined` if `day` isn't that event's day of the week. */
+export function calendarEventOccurrenceOn(event: CalendarEvent, day: Date): Interval | undefined {
+  if (event.dayOfWeek !== day.getDay()) return undefined;
+  const start = addMinutes(startOfDay(day), event.startMinutes);
+  const end = addMinutes(start, event.durationMinutes);
+  return { startAt: start.toISOString(), endAt: end.toISOString() };
+}
+
+/** Every real, time-consuming interval on `day`: fixed `CalendarEvent`
+ *  occurrences, `StudySession`s that actually happened, scheduled-but-
+ *  incomplete task blocks, and `day`'s quiet-hours block if one is set. Not
+ *  merged — callers needing the union should merge themselves
+ *  (`mergeIntervals`); `dayHasConflict` needs fixed/scheduled unmerged
  *  precisely to detect overlaps between them. */
 export function busyIntervalsForDay(
   day: Date,
   events: CalendarEvent[],
   tasks: Task[],
-  sessions: StudySession[]
+  sessions: StudySession[],
+  prefs: FreeTimePreferences
 ): Interval[] {
   const fixed: Interval[] = events
-    .filter((event) => isSameDay(new Date(event.startAt), day))
-    .map((event) => ({ startAt: event.startAt, endAt: event.endAt }));
+    .map((event) => calendarEventOccurrenceOn(event, day))
+    .filter((interval): interval is Interval => interval != null);
   const logged: Interval[] = sessions
     .filter((session) => isSameDay(new Date(session.actualStart), day))
     .map((session) => ({ startAt: session.actualStart, endAt: session.actualEnd }));
@@ -124,7 +153,8 @@ export function busyIntervalsForDay(
     .filter((task) => task.scheduledFor && isSameDay(new Date(task.scheduledFor), day))
     .map((task) => taskWorkBlock(task))
     .filter((block): block is Interval => block != null);
-  return [...fixed, ...logged, ...scheduled];
+  const quiet = quietHoursOn(day, prefs);
+  return quiet ? [...fixed, ...logged, ...scheduled, quiet] : [...fixed, ...logged, ...scheduled];
 }
 
 /** Real free minutes on `day`. For today, the window starts at `now` — the
@@ -136,13 +166,14 @@ export function freeMinutesForDay(
   events: CalendarEvent[],
   tasks: Task[],
   sessions: StudySession[],
-  now: Date
+  now: Date,
+  prefs: FreeTimePreferences
 ): number {
-  const window = wakingWindow(day);
+  const window = wakingWindow(day, prefs);
   if (isSameDay(day, now) && now.getTime() > new Date(window.startAt).getTime()) {
     window.startAt = now.toISOString();
   }
-  const busy = busyIntervalsForDay(day, events, tasks, sessions);
+  const busy = busyIntervalsForDay(day, events, tasks, sessions, prefs);
   return Math.round(sumMinutes(freeIntervals(window, busy)));
 }
 
@@ -152,13 +183,14 @@ export function freeBlocksForDay(
   events: CalendarEvent[],
   tasks: Task[],
   sessions: StudySession[],
-  now: Date
+  now: Date,
+  prefs: FreeTimePreferences
 ): Interval[] {
-  const window = wakingWindow(day);
+  const window = wakingWindow(day, prefs);
   if (isSameDay(day, now) && now.getTime() > new Date(window.startAt).getTime()) {
     window.startAt = now.toISOString();
   }
-  const busy = busyIntervalsForDay(day, events, tasks, sessions);
+  const busy = busyIntervalsForDay(day, events, tasks, sessions, prefs);
   return freeIntervals(window, busy);
 }
 
@@ -166,7 +198,9 @@ export function freeBlocksForDay(
  *  tasks — not logged sessions, which are historical fact, not a planning
  *  conflict) that overlap. */
 export function dayHasConflict(day: Date, events: CalendarEvent[], tasks: Task[]): boolean {
-  const fixed = events.filter((event) => isSameDay(new Date(event.startAt), day));
+  const fixed = events
+    .map((event) => calendarEventOccurrenceOn(event, day))
+    .filter((interval): interval is Interval => interval != null);
   const scheduled = tasks
     .filter((task) => task.scheduledFor && isSameDay(new Date(task.scheduledFor), day))
     .map((task) => taskWorkBlock(task))
@@ -194,10 +228,9 @@ export function remainingEffortMinutes(
   return Math.max(0, deliverable.estimateMinutes - logged);
 }
 
-/** How many days ahead `freeMinutesUntil` will actually sum — beyond this,
- *  `CalendarEvent` (no recurrence yet) has no data for future weeks, so
- *  projected free time would silently overstate availability. Capping the
- *  horizon keeps that gap disclosed rather than quietly wrong. */
+/** How many days ahead `freeMinutesUntil` will actually sum. `CalendarEvent`
+ *  is weekly-recurring now, so unlike before this isn't limited by missing
+ *  future-week data — the cap stays as a sane bound on the loop itself. */
 export const FREE_TIME_HORIZON_DAYS = 14;
 
 /** Real free minutes from `now` through `untilIso` (inclusive), summed day
@@ -210,7 +243,8 @@ export function freeMinutesUntil(
   events: CalendarEvent[],
   tasks: Task[],
   sessions: StudySession[],
-  now: Date
+  now: Date,
+  prefs: FreeTimePreferences
 ): number {
   const until = new Date(untilIso);
   let total = 0;
@@ -218,7 +252,7 @@ export function freeMinutesUntil(
     const day = addDays(startOfDay(now), offset);
     if (day.getTime() > until.getTime()) break;
 
-    const window = wakingWindow(day);
+    const window = wakingWindow(day, prefs);
     if (isSameDay(day, now) && now.getTime() > new Date(window.startAt).getTime()) {
       window.startAt = now.toISOString();
     }
@@ -227,7 +261,7 @@ export function freeMinutesUntil(
     }
     if (new Date(window.endAt).getTime() <= new Date(window.startAt).getTime()) continue;
 
-    const busy = busyIntervalsForDay(day, events, tasks, sessions);
+    const busy = busyIntervalsForDay(day, events, tasks, sessions, prefs);
     total += sumMinutes(freeIntervals(window, busy));
   }
   return Math.round(total);
@@ -248,7 +282,8 @@ export function workloadRisk(
   tasks: Task[],
   sessions: StudySession[],
   events: CalendarEvent[],
-  now: Date
+  now: Date,
+  prefs: FreeTimePreferences
 ): WorkloadRisk {
   if (deliverable.completedAt != null) return "on-track";
   if (isOverdue(deliverable.dueAt, now)) return "overdue";
@@ -257,7 +292,7 @@ export function workloadRisk(
   if (remaining == null) return "no-estimate";
   if (remaining <= 0) return "on-track";
 
-  const available = freeMinutesUntil(deliverable.dueAt, events, tasks, sessions, now);
+  const available = freeMinutesUntil(deliverable.dueAt, events, tasks, sessions, now, prefs);
   if (available <= 0) return "insufficient-time";
 
   const ratio = remaining / available;
@@ -274,10 +309,11 @@ export function atRiskDeliverables(
   tasks: Task[],
   sessions: StudySession[],
   events: CalendarEvent[],
-  now: Date
+  now: Date,
+  prefs: FreeTimePreferences
 ): Deliverable[] {
   return deliverables.filter((deliverable) => {
-    const risk = workloadRisk(deliverable, tasks, sessions, events, now);
+    const risk = workloadRisk(deliverable, tasks, sessions, events, now, prefs);
     return risk === "overdue" || risk === "insufficient-time" || risk === "tight";
   });
 }
