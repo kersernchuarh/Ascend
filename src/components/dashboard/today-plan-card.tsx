@@ -197,6 +197,7 @@ function ActiveSessionBanner({
 }) {
   const minutes = Math.floor(secondsLeft / 60).toString().padStart(2, "0");
   const seconds = (secondsLeft % 60).toString().padStart(2, "0");
+  const minutesRemaining = Math.ceil(secondsLeft / 60);
   return (
     <Link
       href="/focus"
@@ -209,8 +210,14 @@ function ActiveSessionBanner({
           {taskTitle ?? "Free focus session"}
         </span>
       </span>
-      <span className="shrink-0 text-body font-medium tabular-nums text-primary" aria-live="polite">
+      <span className="shrink-0 text-body font-medium tabular-nums text-primary" aria-hidden="true">
         {minutes}:{seconds}
+      </span>
+      {/* Coarse, minute-granularity announcement — not every second (§22
+          item 7); only actually changes (and is only actually announced)
+          once the whole-minute value crosses a boundary. */}
+      <span className="sr-only" aria-live="polite">
+        {minutesRemaining} minute{minutesRemaining === 1 ? "" : "s"} remaining
       </span>
     </Link>
   );

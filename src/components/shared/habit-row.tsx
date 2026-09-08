@@ -33,7 +33,7 @@ function HabitRow({
   const streakUnit = habit.cadence.type === "times_per_week" ? "week" : "day";
 
   return (
-    <div className="flex items-center gap-3 py-2">
+    <label className="flex items-center gap-3 py-2">
       <Checkbox
         checked={completed}
         onCheckedChange={onToggle}
@@ -77,7 +77,7 @@ function HabitRow({
         </div>
         <span className="sr-only">{daysLogged} of 7 days logged this week</span>
       </div>
-    </div>
+    </label>
   );
 }
 

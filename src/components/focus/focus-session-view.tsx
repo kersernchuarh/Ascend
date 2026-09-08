@@ -60,6 +60,10 @@ function FocusSessionView() {
   const seconds = (secondsLeft % 60).toString().padStart(2, "0");
   const progress = (totalSeconds - secondsLeft) / totalSeconds;
   const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
+  const minutesRemaining = Math.ceil(secondsLeft / 60);
+  const minutesRemainingLabel = isFresh
+    ? ""
+    : `${minutesRemaining} minute${minutesRemaining === 1 ? "" : "s"} remaining`;
 
   const todaysSessions = now ? sessionsOnDay(sessions, now) : [];
   const todaysMinutes = now ? totalFocusedMinutes(sessions, now) : 0;
@@ -116,7 +120,7 @@ function FocusSessionView() {
             ) : null}
 
             <div className="relative size-64">
-              <svg viewBox="0 0 256 256" className="size-64">
+              <svg viewBox="0 0 256 256" className="size-64" aria-hidden="true">
                 <circle
                   cx="128"
                   cy="128"
@@ -141,11 +145,19 @@ function FocusSessionView() {
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-display text-foreground tabular-nums" aria-live="polite">
+                <span className="text-display text-foreground tabular-nums" aria-hidden="true">
                   {minutes}:{seconds}
                 </span>
               </div>
             </div>
+            {/* A screen reader doesn't need every second announced — that
+                would spam far more than it informs (§22 item 7). This
+                coarser text only actually changes, and is only actually
+                announced, once the whole-minute value crosses a boundary,
+                even though the component re-renders every second. */}
+            <span className="sr-only" aria-live="polite">
+              {minutesRemainingLabel}
+            </span>
 
             <div className="flex items-center gap-3">
               <Button onClick={handleToggle} size="lg" className="gap-2">

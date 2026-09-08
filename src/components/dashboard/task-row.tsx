@@ -53,47 +53,49 @@ function TaskRow({
 
   return (
     <li className="group flex items-start gap-2 border-b border-border py-3 last:border-0">
-      <Checkbox
-        checked={!!task.completedAt}
-        onCheckedChange={onToggle}
-        aria-label={task.completedAt ? `Mark "${task.title}" not done` : `Mark "${task.title}" done`}
-        className="mt-[3px] shrink-0"
-      />
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <span
-          className={cn(
-            "text-body transition-colors duration-200",
-            task.completedAt ? "text-muted-foreground line-through" : "text-foreground"
-          )}
-        >
-          {task.title}
-        </span>
-        <div className="flex flex-wrap items-center gap-2">
-          <PillBadge color={pillar.color}>
-            <Icon className="size-3" />
-            {pillar.label}
-          </PillBadge>
-          {task.scheduledFor ? (
-            <span className="text-caption text-muted-foreground">
-              {formatTime(task.scheduledFor)}
-            </span>
-          ) : null}
-          {task.estimateMinutes ? (
-            <span className="text-caption text-muted-foreground">
-              ~{formatDuration(task.estimateMinutes)}
-            </span>
-          ) : null}
-          {dueAt ? (
-            isUrgent ? (
-              <PillBadge color="red">{formatRelativeDay(dueAt, now)}</PillBadge>
-            ) : (
+      <label className="flex min-w-0 flex-1 items-start gap-2">
+        <Checkbox
+          checked={!!task.completedAt}
+          onCheckedChange={onToggle}
+          aria-label={task.completedAt ? `Mark "${task.title}" not done` : `Mark "${task.title}" done`}
+          className="mt-[3px] shrink-0"
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span
+            className={cn(
+              "text-body transition-colors duration-200",
+              task.completedAt ? "text-muted-foreground line-through" : "text-foreground"
+            )}
+          >
+            {task.title}
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <PillBadge color={pillar.color}>
+              <Icon className="size-3" />
+              {pillar.label}
+            </PillBadge>
+            {task.scheduledFor ? (
               <span className="text-caption text-muted-foreground">
-                Due {formatRelativeDay(dueAt, now)}
+                {formatTime(task.scheduledFor)}
               </span>
-            )
-          ) : null}
+            ) : null}
+            {task.estimateMinutes ? (
+              <span className="text-caption text-muted-foreground">
+                ~{formatDuration(task.estimateMinutes)}
+              </span>
+            ) : null}
+            {dueAt ? (
+              isUrgent ? (
+                <PillBadge color="red">{formatRelativeDay(dueAt, now)}</PillBadge>
+              ) : (
+                <span className="text-caption text-muted-foreground">
+                  Due {formatRelativeDay(dueAt, now)}
+                </span>
+              )
+            ) : null}
+          </div>
         </div>
-      </div>
+      </label>
       <div className="flex shrink-0 items-center gap-0.5">
         <Button
           variant="ghost"
