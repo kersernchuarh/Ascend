@@ -21,7 +21,7 @@ export const SIDEBAR_NAV: NavItem[] = [
   { label: "Work", href: "/work", icon: CheckSquare },
   { label: "Plan", href: "/plan", icon: Calendar },
   { label: "Habits", href: "/habits", icon: Repeat },
-  { label: "Insights", href: "/insights", icon: BarChart3 },
+  { label: "Progress", href: "/progress", icon: BarChart3 },
   { label: "AI Coach", href: "/ai", icon: Sparkles },
 ];
 
@@ -44,7 +44,7 @@ export const ROUTE_TITLES: Record<string, string> = {
   "/work": "Work",
   "/plan": "Plan",
   "/habits": "Habits",
-  "/insights": "Insights",
+  "/progress": "Progress",
   "/ai": "AI Coach",
   "/settings": "Settings",
   "/more": "More",

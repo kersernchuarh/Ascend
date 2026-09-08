@@ -3,32 +3,34 @@
 import { useMemo } from "react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
-import { createSeedCalendarEvents } from "@/data/dashboard";
+import { useCalendarEvents } from "@/state/calendar-event-context";
 import { useNow } from "@/domain/use-now";
 import { addDays, isSameDay, startOfWeek } from "@/domain/time";
+import { calendarEventOccurrenceOn } from "@/domain/plan";
 import { formatWeekdayShort } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 
 /** Mobile-only orientation strip — real days of the actual current week
- *  with real per-day event counts from seed `CalendarEvent[]`. Doesn't map
- *  onto a specific tier of the Today/Deadlines/Progress hierarchy; it's a
- *  lightweight "what week is this" aid, kept small and placed accordingly. */
+ *  with real per-day event counts from the same persisted `CalendarEvent[]`
+ *  Plan and Home read. Doesn't map onto a specific tier of the
+ *  Today/Deadlines/Progress hierarchy; it's a lightweight "what week is
+ *  this" aid, kept small and placed accordingly. */
 function WeekStripCard() {
   const now = useNow();
+  const { events } = useCalendarEvents();
 
   const weekDays = useMemo(() => {
     if (!now) return [];
-    const events = createSeedCalendarEvents(now);
     const monday = startOfWeek(now);
     return Array.from({ length: 7 }, (_, i) => {
       const date = addDays(monday, i);
       return {
         date,
         isToday: isSameDay(date, now),
-        eventCount: events.filter((event) => isSameDay(new Date(event.startAt), date)).length,
+        eventCount: events.filter((event) => calendarEventOccurrenceOn(event, date) != null).length,
       };
     });
-  }, [now]);
+  }, [now, events]);
 
   return (
     <Card className="w-full">

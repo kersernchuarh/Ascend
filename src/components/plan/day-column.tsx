@@ -5,7 +5,7 @@ import { PillBadge } from "@/components/shared/pill-badge";
 import { cn } from "@/lib/utils";
 import { formatDuration, formatTime, formatWeekdayShort } from "@/lib/format-date";
 import { isOverdue, isSameDay, startOfDay } from "@/domain/time";
-import { dayHasConflict, freeMinutesForDay } from "@/domain/plan";
+import { calendarEventOccurrenceOn, dayHasConflict, freeMinutesForDay, type FreeTimePreferences } from "@/domain/plan";
 import { PILLARS } from "@/lib/pillars";
 import type { CalendarEvent, Deliverable, StudySession, Task } from "@/domain/types";
 
@@ -16,6 +16,7 @@ type DayColumnProps = {
   deliverables: Deliverable[];
   sessions: StudySession[];
   now: Date;
+  prefs: FreeTimePreferences;
 };
 
 /**
@@ -23,16 +24,23 @@ type DayColumnProps = {
  * tasks, and a single real "free" number. Read-only by design — Plan
  * answers "when", not "what"; creating/editing tasks stays Work's and
  * Home's job (blueprint §11: "Must NOT contain: Task creation as primary
- * flow"). Free time and the conflict flag are only computed for today and
- * future days — both are forward-looking planning concepts that don't mean
- * anything for a day that's already happened.
+ * flow"). `CalendarEvent` editing lives in its own schedule section, not
+ * inline here, since an event is weekly-recurring — editing it from one
+ * day's column would misleadingly suggest a single-day change. Free time
+ * and the conflict flag are only computed for today and future days — both
+ * are forward-looking planning concepts that don't mean anything for a day
+ * that's already happened.
  */
-function DayColumn({ day, events, tasks, deliverables, sessions, now }: DayColumnProps) {
+function DayColumn({ day, events, tasks, deliverables, sessions, now, prefs }: DayColumnProps) {
   const isToday = isSameDay(day, now);
   const isPast = startOfDay(day).getTime() < startOfDay(now).getTime();
 
-  const dayEvents = events
-    .filter((event) => isSameDay(new Date(event.startAt), day))
+  type DayEvent = { event: CalendarEvent; startAt: string };
+  const dayEvents: DayEvent[] = events
+    .flatMap((event) => {
+      const occurrence = calendarEventOccurrenceOn(event, day);
+      return occurrence ? [{ event, startAt: occurrence.startAt }] : [];
+    })
     .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
   const dueDeliverables = deliverables.filter(
     (deliverable) => deliverable.completedAt == null && isSameDay(new Date(deliverable.dueAt), day)
@@ -41,7 +49,7 @@ function DayColumn({ day, events, tasks, deliverables, sessions, now }: DayColum
     .filter((task) => task.scheduledFor && isSameDay(new Date(task.scheduledFor), day))
     .sort((a, b) => new Date(a.scheduledFor as string).getTime() - new Date(b.scheduledFor as string).getTime());
 
-  const freeMinutes = isPast ? null : freeMinutesForDay(day, events, tasks, sessions, now);
+  const freeMinutes = isPast ? null : freeMinutesForDay(day, events, tasks, sessions, now, prefs);
   const conflict = !isPast && dayHasConflict(day, events, tasks);
   const nothingAtAll = dayEvents.length === 0 && dueDeliverables.length === 0 && scheduledTasks.length === 0;
 
@@ -75,9 +83,9 @@ function DayColumn({ day, events, tasks, deliverables, sessions, now }: DayColum
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {dayEvents.map((event) => (
+          {dayEvents.map(({ event, startAt }) => (
             <div key={event.id} className="text-caption text-muted-foreground">
-              <span className="text-foreground">{event.title}</span> · {formatTime(event.startAt)}
+              <span className="text-foreground">{event.title}</span> · {formatTime(startAt)}
             </div>
           ))}
           {dueDeliverables.map((deliverable) => (

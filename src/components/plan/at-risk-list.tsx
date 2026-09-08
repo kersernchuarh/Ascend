@@ -4,7 +4,7 @@ import { ShieldCheck } from "lucide-react";
 import { PillBadge } from "@/components/shared/pill-badge";
 import { formatDuration, formatRelativeDay } from "@/lib/format-date";
 import { PILLARS } from "@/lib/pillars";
-import { freeMinutesUntil, remainingEffortMinutes, workloadRisk, type WorkloadRisk } from "@/domain/plan";
+import { freeMinutesUntil, remainingEffortMinutes, workloadRisk, type FreeTimePreferences, type WorkloadRisk } from "@/domain/plan";
 import type { CalendarEvent, Deliverable, StudySession, Task } from "@/domain/types";
 
 type AtRiskListProps = {
@@ -14,6 +14,7 @@ type AtRiskListProps = {
   sessions: StudySession[];
   events: CalendarEvent[];
   now: Date;
+  prefs: FreeTimePreferences;
 };
 
 const RISK_LABEL: Partial<Record<WorkloadRisk, string>> = {
@@ -28,7 +29,7 @@ const RISK_LABEL: Partial<Record<WorkloadRisk, string>> = {
  * a bare severity badge, per the blueprint's "every number traces to a
  * derivation" rule.
  */
-function AtRiskList({ deliverables, tasks, sessions, events, now }: AtRiskListProps) {
+function AtRiskList({ deliverables, tasks, sessions, events, now, prefs }: AtRiskListProps) {
   if (deliverables.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
@@ -41,9 +42,9 @@ function AtRiskList({ deliverables, tasks, sessions, events, now }: AtRiskListPr
   return (
     <ul>
       {deliverables.map((deliverable) => {
-        const risk = workloadRisk(deliverable, tasks, sessions, events, now);
+        const risk = workloadRisk(deliverable, tasks, sessions, events, now, prefs);
         const remaining = remainingEffortMinutes(deliverable, tasks, sessions) ?? 0;
-        const available = Math.max(0, freeMinutesUntil(deliverable.dueAt, events, tasks, sessions, now));
+        const available = Math.max(0, freeMinutesUntil(deliverable.dueAt, events, tasks, sessions, now, prefs));
         const pillar = PILLARS[deliverable.pillar];
 
         return (

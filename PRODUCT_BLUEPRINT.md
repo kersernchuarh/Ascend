@@ -159,17 +159,19 @@ Planned-vs-actual on one record is what enables: adherence, estimate-drift corre
 Ascend does not schedule these; it schedules *around* them. This entity is what makes free-time computation possible.
 
 > **As implemented (Phase 1):** `{id, title, startAt, endAt}` — no `kind`/`pillarId`/`recurrenceRule`; still seed-only (no CRUD UI exists), no consumer needs the rest yet.
+>
+> **As implemented (Phase 8 — "make Plan tell the truth"):** redesigned to `{id, title, kind: 'class'|'cca'|'appointment'|'personal', dayOfWeek: 0-6, startMinutes, durationMinutes, createdAt}`, with real, persisted CRUD via `/plan`'s "Your fixed schedule" section. Deliberately **not** the `{startAt, endAt, recurrenceRule?}` shape sketched above: a real fixed commitment (a class, a CCA) repeats every week, and bolting a `recurrenceRule` onto absolute datetimes would force re-entering it every week without actually building recurrence — out of this phase's "minimal" scope. Making the type inherently weekly-recurring (day-of-week + minutes-since-midnight) gets the same real-world behaviour with less machinery, at zero migration risk since `CalendarEvent` had never been persisted before this phase. `domain/plan.calendarEventOccurrenceOn(event, day)` projects an event onto a concrete day's `Interval`; every free-time/workload consumer uses it instead of an `event.startAt` comparison. Still no `pillarId` — no consumer needs it.
 
 **`Habit`** — a recurring intention. *Replaces the definition half of `HabitEntry`.*
 `id, name, pillarId, cadence: {type:'daily'|'times_per_week', target:number}, unit?: 'count'|'minutes'|'hours', targetValue?, icon, color, archived`
 
-> **As implemented:** `{id, label, icon, color}` — no `cadence`/`target`/`pillarId`/`archived`. Deliberate, not an oversight: nothing in the product lets a user set a target yet, and assuming an implicit default (e.g. "daily") would silently assert a goal they never chose — worse than having no adherence metric at all (§9.3, §12).
+> **As implemented (Habits + Progress phase):** `{id, label, description?, cadence, iconKey, color, createdAt, archivedAt?}` — no `pillarId` (evaluated and rejected: no consumer needs per-pillar habit correlation; §12). `cadence: {type:"daily"} | {type:"days_of_week", days:number[]} | {type:"times_per_week", target:number}` — real now, not deferred. `archivedAt` replaces the planned `archived: boolean`, matching the `completedAt`-presence convention used everywhere else rather than a second field that could disagree with it. **`icon` is deliberately `iconKey: HabitIconKey` (a string), never the `LucideIcon` component itself** — a component reference isn't JSON-serializable, and one stored in state then round-tripped through `localStorage` comes back as an empty object on the next load, breaking every render. This is a real bug live browser testing caught while building this phase; `lib/habit-icons.HABIT_ICON_MAP` resolves the key back to a component at render time, the same pattern `Pillar` (`lib/pillars.ts`) already used correctly.
 
 **`HabitLog`** — a dated observation. *New.*
 `id, habitId, date: ISO date, value: number|boolean, loggedAt`
 Streaks, adherence and the habit percentage are all derived from this. None are stored.
 
-> **As implemented:** `{id, habitId, date}` — presence-only, no `value`/`loggedAt`. A habit is logged or it isn't; there is no `completed: false` row, since "not logged yet" and "explicitly marked not done" are indistinguishable in practice and a boolean that's always `true` when present just invites drift. `date` is the local calendar date (`domain/time.toIsoDateLocal`), not a UTC-derived slice — see §18.1 for the bug that distinction fixes. `habitStreak` and `weeklyCompletionGrid` (§16) derive from this; a percentage/adherence figure is not implemented (needs `Habit.cadence`, which doesn't exist — see above).
+> **As implemented:** `{id, habitId, date}` — presence-only, no `value`/`loggedAt`, unchanged since Phase 2. `date` is the local calendar date (`domain/time.toIsoDateLocal`), not a UTC-derived slice — see §18.1 for the bug that distinction fixes. `habitStreak`, `habitAdherence`, `weeklyCompletionGrid` and `completionHistory` (§16) all derive from this — cadence-aware now that `Habit.cadence` exists (see above).
 
 **`Pillar`** — fixed taxonomy. Owns no data; tags other entities. Provides identity colour and icon. Already well implemented in `src/lib/pillars.ts`.
 
@@ -184,6 +186,8 @@ This type is what keeps AI from acting unilaterally (§19).
 **`UserPreferences`** — *New.*
 `sessionLengthMinutes (default 45), breakMinutes, weekStartsOn, quietHours, pillarTargets, subjects[], onboardingCompletedAt`
 The 45-minute timer is currently hardcoded as `STUDY_SESSION_SECONDS`.
+
+> **As implemented (Phase 8):** `{id: "singleton", wakingStartHour, wakingEndHour, quietHoursStart?, quietHoursEnd?, sessionLengthMinutes}` — a true singleton (`id` is always the literal `"singleton"`), stored through the same `Repository<T>` used for every collection rather than a new persistence primitive. No `breakMinutes`/`weekStartsOn`/`pillarTargets`/`subjects[]`/`onboardingCompletedAt` yet — none has a consumer. Quiet hours are optional and unset by default, never assumed. `domain/plan.ts`'s free-time engine now takes a `FreeTimePreferences` (a `Pick` of the four hour fields) as an explicit parameter everywhere it used to read hardcoded module constants — this is the actual mechanism that makes Plan's numbers real rather than fictional. `STUDY_SESSION_SECONDS` is deleted; `/focus` now reads `preferences.sessionLengthMinutes` directly. **The same hydration-race bug surfaced twice building this**, both times because a component's `useState` initializer read `preferences` on first render, before `PreferencesProvider` finished its async hydration, and then never re-synced: Settings' quiet-hours checkbox stayed permanently unchecked after a reload even with real saved values, and the Focus Session timer stayed stuck at the old duration (and its button stuck reading "Resume") for anyone off the 45-minute default. Both fixed the same way — an explicit `useEffect` re-syncing local state once `status === "ready"`, matching the codebase's existing `useNow`/hydration precedent — not by restructuring either provider.
 
 **`Goal`** — **deferred.** Defined here only to prevent premature invention: `id, title, pillarId, horizon, targetDate?, measure?`. Do not build until §26's conditions are met.
 
@@ -246,7 +250,7 @@ Five primary destinations, plus Settings. Nav count drops by one and fits the mo
 **Renames:** Home → **Today** (names the job), Insights → **Progress** (implies history, sets honest expectations), Tasks → **Work** (accommodates Deliverables + Subjects, not just a checklist).
 **Deletions:** **Calendar** as a standalone destination (absorbed into Plan) and **AI Coach** as a destination (redistributed per §19).
 
-**Status:** Tasks → **Work** shipped in Phase 4; Calendar → **Plan** shipped in Phase 5 (both real destinations now, not `ComingSoon` placeholders). Home → "Today" and Insights → "Progress" have **not** been renamed — the routes and nav labels are still `/` "Home" and `/insights` "Insights"; each rename is deferred to whichever phase actually rebuilds that destination (§9's Home redesign already shipped without the rename, and Insights is still a placeholder), rather than relabeling a screen ahead of the rebuild that would justify its new name.
+**Status:** Tasks → **Work** shipped in Phase 4; Calendar → **Plan** shipped in Phase 5; Insights → **Progress** shipped in the Habits + Progress phase (three of four real destinations now, none of them `ComingSoon` placeholders). Home → **Today** has **not** been renamed — the route and nav label are still `/` "Home"; §9's Home redesign already shipped without it, and the rename stays deferred until a phase actually revisits Home's information architecture again, rather than relabeling a screen ahead of a rebuild that would justify its new name.
 
 Only sections whose data is real should appear in the nav. Until a section's data exists, it should not be a visible destination — a placeholder route is a worse experience than a shorter nav.
 
@@ -363,6 +367,10 @@ The free-time engine (§11, §16) landed this pass, and §9.3's "not built this 
 
 **Not built this pass, and why:** the deadline risk strip and live now-line timeline from §9.2 still don't exist on Home. The new `workloadRisk` engine (§11) is real and tested, but surfacing it on Home as a redesigned risk strip is a Home information-architecture change this phase's scope didn't call for — it now lives on `/plan`'s "At risk" panel instead. §9.2 remains the eventual target.
 
+### 9.5 Habits + Progress Home integration record
+
+Home's habit surfaces (`HabitTrackerCard`, `TodayProgressStrip`'s "Habits logged" metric) now read the same real, persisted `Habit[]` the Habits page manages, filtered to **active habits actually due today** (`domain/metrics.dueTodayHabits`) — not every habit, per §9.2's original "Habits due today" intent, buildable now that cadence is real. A `times_per_week` habit has no single due day, so it's always included (any day can still contribute toward its weekly target); an archived habit never is. This is a genuine, deliberately small Home change: no new card, no new information architecture, just a fix so a habit's cadence is respected wherever it's shown, including on Home. Per this phase's own "do not turn Home into Progress" instruction, no Progress-specific figure (workload risk, week-over-week deltas, estimate accuracy) was added to Home — those stay on `/progress`.
+
 ---
 
 ## 10. Tasks specification (`Work`)
@@ -403,11 +411,13 @@ The free-time engine (§11, §16) landed this pass, and §9.3's "not built this 
 
 **Status (Phase 5, shipped):** `/plan` replaces the old `/calendar` placeholder. The free-time engine (`domain/plan.ts`) is real: `wakingWindow`/`mergeIntervals`/`freeIntervals` (the interval-merge/subtract primitives), `freeMinutesForDay`/`freeBlocksForDay` (a day's free minutes and actual open gaps), `remainingEffortMinutes` and `workloadRisk` (the effort-vs-free-time `risk()` this section describes — deliberately named differently from §16's time-only `deadlineRisk` so the two are never conflated), and `dayHasConflict`. The week view shows real fixed events, due-that-day deliverable markers, scheduled tasks, a real free-minutes figure per day, and a conflict flag; an "At risk" panel lists deliverables whose `workloadRisk` needs attention, each with its own one-line real derivation. No timezone handling, per this section's own scope (unchanged).
 
+**Status (Phase 8 — "make Plan tell the truth", shipped):** the single largest gap this section flagged is closed — `CalendarEvent` now has real, persisted CRUD (a new "Your fixed schedule" section on `/plan`: add/edit/delete a weekly-recurring commitment), and every free-time/workload number in the app (Home, Plan, Progress) is computed against a real user's real week instead of the fictional seed week. `wakingWindow` and the entire free-time engine now take a `FreeTimePreferences` parameter sourced from real, persisted `UserPreferences` (§6.2) instead of hardcoded constants, so quiet hours and a custom waking window are both real inputs now, not aspirational ones. Verified live, not just by unit test: adding/editing/deleting a fixed event, narrowing waking hours, and enabling quiet hours each moved every affected day's free-minutes figure by exactly the expected amount.
+
 **Deliberately not built this pass, and why:**
-- **No `CalendarEvent` CRUD.** It stays exactly what it was (a read-only seed factory) — entering recurring commitments, and placing/moving/resizing sessions, is a materially larger surface (forms, drag/resize, validation) this phase's "deterministic planning foundation first" framing didn't call for. `Task.scheduledFor` + `estimateMinutes` together stand in for "planned session" (no new entity), which is what the week view actually reads.
-- **No "Plan my week" proposal.** That's explicitly AI/rules-planning territory this phase excluded.
-- **`freeMinutesUntil`'s projection is capped at `FREE_TIME_HORIZON_DAYS` (14 days) and disclosed, not silently wrong** — `CalendarEvent` has no `recurrenceRule` yet, so a day beyond the currently-seeded week has no fixed-event data to subtract, which would otherwise overstate how much free time is really available that far out.
+- **No "Plan my week" proposal.** Still explicitly AI/rules-planning territory this phase excluded.
+- **`freeMinutesUntil`'s projection is still capped at `FREE_TIME_HORIZON_DAYS` (14 days), but the reason has changed.** `CalendarEvent` is weekly-recurring now, so the cap is no longer covering for missing future-week fixed-event data (as it did pre-Phase-8) — it's now just a sane bound on the summing loop itself.
 - **`workloadRisk` returns `"no-estimate"` (excluded from the "at risk" list) rather than guessing** when a deliverable has no `estimateMinutes` — there is nothing honest to compare against, so silence beats a fabricated risk level.
+- **No task/deliverable edit-in-place.** Deliberately descoped from this phase's proposal (create/toggle/delete only remains); still open, tracked in §28's gap #3.
 
 **Deliberate simplification:** no timezone handling in v1 (single-user, single locale) — but store ISO datetimes so it remains possible.
 
@@ -429,7 +439,7 @@ The free-time engine (§11, §16) landed this pass, and §9.3's "not built this 
 
 **Model correction:** replace `HabitEntry.value: number` (a computed percentage stored as data) with definition + dated logs. Adherence, streaks and percentages become derivations. Also drop the seeded five-habit list for new users — habits the user didn't choose are noise; ship 3–4 *suggestions* during onboarding instead.
 
-**Status:** the model correction above shipped in Phase 2 (`HabitLog` is presence-based: `{id, habitId, date}`), and a Home summary now shows a real 7-day completion grid plus streak (§9.3, §18.1). Cadence/target — the part of this spec that makes genuine *adherence* computable — deliberately has not: nothing lets a user set one yet, and assuming an implicit default (e.g. "daily") would silently assert a target they never chose. The 7-day grid answers "what days did I miss" without needing one; a dedicated Habits page is still not built.
+**Status (Habits + Progress phase, shipped):** `/habits` replaces the placeholder. `Habit` is now real, persisted, user-created/edited/archived state (`ascend:habits`, seeded once from the same 5 present-state demo habits as before, exactly like `createSeedTasks`/`createSeedSubjects` — but every one is now genuinely editable and archivable, which directly resolves this section's "habits the user didn't choose are noise" complaint without needing a separate onboarding flow). Cadence is real: `HabitCadence = {type:"daily"} | {type:"days_of_week", days} | {type:"times_per_week", target}` — the smallest model covering this section's own three named cases. Adherence and streaks are both real, cadence-aware derivations (`domain/metrics.habitAdherence`/`habitStreak`) — see §16 for their exact rules, including how a `times_per_week` streak (weeks met, not days) differs from a daily/specific-days one. The Habits page shows a real 4-week completion grid (`completionHistory`) that also accepts corrections to any past day, which is this section's "backfill yesterday" ask generalized to any recent day rather than only yesterday specifically. **Not done:** the seeded 5-habit list is still seeded (not replaced by 3-4 onboarding suggestions) — reconciled above, not silently dropped; `pillar` tagging on `Habit` was evaluated and rejected (no consumer needs per-pillar habit correlation — Progress's habit/focus juxtaposition is global, not per-pillar).
 
 ---
 
@@ -450,6 +460,8 @@ The free-time engine (§11, §16) landed this pass, and §9.3's "not built this 
 **Verdict on the balance score:** as it exists — the mean of six hardcoded constants — it should be **deleted, not relocated**. It is unexplainable and unactionable, and it occupies the second-most-prominent position on the app's main screen. If it returns, it must be (a) computed from logged sessions and habit logs against user-set pillar targets, (b) always accompanied by its derivation, and (c) presented as a trend. A single decontextualised 0–100 life score is a vanity metric; it does not survive principle 1.
 
 **Sequencing:** Progress cannot exist honestly until Sessions and HabitLogs have accumulated real data. It should be the *last* data-bearing section built, not an early one — the opposite of the current nav's implication.
+
+**Status (Habits + Progress phase, shipped):** `/insights` is renamed to **`/progress`** (this section's own deferred rename from §7.2, done now because this is the phase that actually rebuilds it) and replaces the placeholder. Four sections, not the four listed above verbatim — reused rather than re-invented where a real engine already existed: **This week** (real sessions/focused-minutes/tasks-completed, with a week-over-week delta shown *only* when the previous week has ≥1 real record — `domain/progress.weekInReview`) → **Workload** (Work's `workSummary` + Plan's `workloadRisk`/`atRiskDeliverables`/`AtRiskList`, reused directly, plus a new real minutes-by-pillar bar list) → **Habits** (the same `HabitCard` the Habits page uses, plus one plain-juxtaposition sentence — real focused minutes next to the real count of distinct days with a habit logged this week — when both exist; never a computed correlation coefficient) → **Estimate accuracy** (real once ≥1 completed, estimated deliverable has logged session time behind it — `domain/progress.estimateAccuracy`). **Not built:** "load vs wellbeing" as a genuine correlation (the juxtaposition sentence is the honest, restrained version); pillar balance over time (still gated on `UserPreferences.pillarTargets`, which doesn't exist); the balance score (still not resurrected, per this section's own verdict).
 
 ---
 
@@ -483,6 +495,8 @@ The four quick actions already in the code ("Plan my week", "Generate revision t
 
 **Must NOT contain:** theme switching (dark-only is a deliberate product decision, §24), account/billing (no accounts in v1), or feature flags.
 
+**Status (Phase 8 — "make Plan tell the truth", shipped):** `/settings` replaces the placeholder with a real, minimal page — deliberately not the full contents list above. Three cards, each its own uncontrolled form: waking hours (start/end), quiet hours (an optional checkbox-gated start/end pair — unset by default, never assumed), and Focus Session length in minutes. Each field has exactly one real consumer (`domain/plan.ts`'s free-time engine, or the Focus Session timer) — this is not a general preferences surface. **Not built:** break length, week start, subjects management, pillar targets, notifications, export/import/reset — none has a consumer yet, or (export/reset) is tracked separately in §28's gap list. See §6.2's `UserPreferences` note for the hydration-race bug found and fixed in this page's quiet-hours checkbox.
+
 **Data controls are not optional.** Once persistence lands, the user needs a way to export and to reset — both for trust and for recovering from corrupted local state (§18).
 
 ---
@@ -513,21 +527,23 @@ Every number visible in the UI should trace to exactly one entry in this table. 
 
 **Time handling:** store ISO 8601; treat "today" as a function of an **injectable clock** so derivations are testable and the UI can't drift. A `useNow(granularity)` hook drives the now-line and the live timer.
 
-**What's actually implemented (Phases 1-5), as distinct from the planned catalogue above** — all pure, unit-tested, no React:
+**What's actually implemented, as distinct from the planned catalogue above** — all pure, unit-tested, no React:
 
 | Function | File | Note |
 | --- | --- | --- |
 | `isDueToday`, `isOverdue`, `daysUntilDue`, `remainingMinutes` | `domain/time.ts` | |
 | `deadlineRisk` | `domain/time.ts` | Time-proximity only — still deliberately distinct from `workloadRisk` below (§11), even though `freeTime` now exists, so a due-soon badge and an effort-aware risk signal are never mistaken for the same thing. |
-| `completionRate`, `scheduleConflict`, `sortByIsoDate` | `domain/time.ts` | `completionRate` has no consumer yet — built for §13, ready when needed. `scheduleConflict` now powers `domain/plan.dayHasConflict`. |
+| `completionRate`, `scheduleConflict`, `sortByIsoDate` | `domain/time.ts` | `scheduleConflict` powers `domain/plan.dayHasConflict`. |
 | `startOfDay`, `endOfDay`, `startOfWeek`, `isSameDay`, `addDays`, `addMinutes`, `toIsoDateLocal`, `fromIsoDateLocal` | `domain/time.ts` | Calendar-day arithmetic; `toIsoDateLocal` exists specifically because a UTC-based date string is wrong for part of the evening in positive-UTC-offset zones (§18.1); `fromIsoDateLocal` is its inverse, for parsing `<input type="date">` values without the same UTC-midnight bug. |
-| `totalFocusedMinutes`, `sessionsOnDay`, `weeklyActivity` | `domain/metrics.ts` | Session-derived; `weeklyActivity` has no UI consumer yet (ready for Progress). |
-| `habitStreak`, `weeklyCompletionGrid` | `domain/metrics.ts` | Habit-derived; power Home's habit summary (§9.3). |
+| `totalFocusedMinutes`, `sessionsOnDay`, `weeklyActivity` | `domain/metrics.ts` | Session-derived. |
+| `isHabitDueOn`, `dueTodayHabits`, `habitStreak`, `habitAdherence`, `weeklyCompletionGrid`, `completionHistory` | `domain/metrics.ts` | Habit-derived, cadence-aware since the Habits + Progress phase. `habitStreak` splits into a day-level rule (`daily`/`days_of_week`) and a week-level one (`times_per_week` — consecutive weeks meeting target, not consecutive days). `habitAdherence` compares against due-days-*elapsed-so-far* this week, not the full week, so a Tuesday doesn't read as an unfairly low ratio. `completionHistory` generalizes `weeklyCompletionGrid` to N weeks for the Habits page. |
 | `isMeaningfulSessionDuration` | `domain/metrics.ts` | The ≥60s-real-effort misclick filter for recording a session at all. |
 | `effectiveDueAt`, `deliverableTaskProgress`, `loggedMinutesForDeliverable`, `workSummary`, and other Subject/Deliverable/Task rollups | `domain/work.ts` | Phase 4 — power `/work` and Home's Upcoming card/backlog picker. |
-| `freeMinutesForDay`, `freeBlocksForDay`, `freeMinutesUntil`, `remainingEffortMinutes`, `workloadRisk`, `dayHasConflict` | `domain/plan.ts` | Phase 5 — the `freeTime`/`remainingEffort`/`risk(deliverable)` rows above, now real. See §11's status note for exact names and disclosed limitations (horizon cap, no `CalendarEvent` recurrence). |
+| `freeMinutesForDay`, `freeBlocksForDay`, `freeMinutesUntil`, `remainingEffortMinutes`, `workloadRisk`, `dayHasConflict`, `calendarEventOccurrenceOn` | `domain/plan.ts` | Phase 5 — the `freeTime`/`remainingEffort`/`risk(deliverable)` rows above, now real. `calendarEventOccurrenceOn(event, day)` is Phase 8 — projects a weekly-recurring `CalendarEvent` onto one concrete day's `Interval`; every function in this row now also takes a `FreeTimePreferences` parameter (real `UserPreferences`), replacing the hardcoded waking-window constants Phase 5 shipped with. See §11's status note for disclosed limitations (horizon cap). |
+| `todayPeriod`, `currentWeekPeriod`, `previousWeekPeriod`, `weekPeriod`, `isWithinPeriod` | `domain/periods.ts` | Habits + Progress phase — one place for period boundaries, per this section's own "reusable deterministic utilities for period calculations" requirement, rather than each component inlining its own week math. |
+| `weekInReview`, `workloadByPillar`, `estimateAccuracy`, `weeklyFocusHabitJuxtaposition` | `domain/progress.ts` | Habits + Progress phase — power `/progress`. `weekInReview`'s previous-week figures are `null` (not zeroed) unless the previous week has ≥1 real record. `weeklyFocusHabitJuxtaposition` is deliberately a plain juxtaposition of two real numbers, not a computed correlation — see §13's status note. |
 
-Not implemented, and not planned until the row's own prerequisite exists: `nextBestAction`, `adherence`, `estimateDrift`, `pillarBalance` — each needs a rules/AI layer, Habit cadence, or Sessions at volume that don't exist yet.
+Not implemented, and not planned until the row's own prerequisite exists: `nextBestAction`, `estimateDrift`, `pillarBalance` — each needs a rules/AI layer or `UserPreferences.pillarTargets`, neither of which exists yet.
 
 ---
 
@@ -773,7 +789,7 @@ Everything currently making Ascend feel like a prototype, ranked strictly by pro
 | 7 | **Inert controls** — AI send, search, ⌘K, bell, "View all" | Teaches the user the app is a mockup. Cheap to fix. | ✅ **Resolved, by removal.** All five removed rather than implemented (§8, §14, §22 item 5) — none had a real feature behind it yet. |
 | 8 | **No free-time / risk engine** | The differentiating capability (§1). Deterministic and buildable now. | **Still open.** Needs `CalendarEvent` at volume + Preferences; this is Phase 5 (Plan). `deadlineRisk` (§16) is a time-proximity stand-in, not this. |
 | 9 | **No onboarding or personalisation** | Ascend cannot know the user's subjects, deadlines or targets — so it cannot be useful even in principle. | **Still open.** First-run still seeds mock content rather than prompting (§23). |
-| 10 | **Habit model conflates definition with statistic** | Blocks logging, streaks and cadence — i.e. all real habit value. | ✅ **Resolved for logging and streaks (Phase 2 + Home redesign).** `HabitLog` is real and dated; `habitStreak`/`weeklyCompletionGrid` are real derivations. Cadence itself remains deliberately unbuilt (§12, §18.1). |
+| 10 | **Habit model conflates definition with statistic** | Blocks logging, streaks and cadence — i.e. all real habit value. | ✅ **Fully resolved (Habits + Progress phase).** `HabitLog` is real and dated; `Habit` now carries real cadence; `habitStreak`/`habitAdherence`/`completionHistory` are all real, cadence-aware derivations. Nothing from this gap remains open (§12, §16, §18.1). |
 | 11 | **Six placeholder routes** | The nav promises a product that doesn't exist. Prefer a shorter nav (§7.2). | **Still open.** The IA recommendation in §7.2 (five sections, renamed) has not been acted on; the six placeholder routes and current names are unchanged. |
 
 ### P2 — quality and durability
@@ -816,7 +832,7 @@ multi-user/teams/classrooms · parent or teacher visibility · social features �
 
 Eight phases. Ordered strictly by dependency, and deliberately front-loaded with non-visual work — the first two phases add almost no new UI, which is the point. Phases 1–3 are the ones that convert the prototype into a product.
 
-**Status: Phases 1-5 shipped (by actual scope, not this roadmap's numbering — see below), with real, deliberate divergence from the plan at every step, not drift.** Actual Phase 1 (`domain/`, real dates) shipped *without* `Subject`/`Deliverable` — deferred whole to a later Work phase, since nothing yet needed them and inventing them early would have been schema ahead of a consumer. Actual Phase 2 shipped persistence *and* Sessions/Habits together (this roadmap splits them into Phases 2 and 3), but *without* `UserPreferences`, a Settings page, export/import, error boundaries, or a toast/undo layer — none had anywhere to live yet (no Settings surface) or a concrete trigger (no error UI has ever needed to fire). A third pass then rebuilt Home entirely (not separately planned below — closest to this roadmap's Phase 6, done earlier because direct product input called for it). A fourth pass shipped `Subject`/`Deliverable`/`Task` CRUD as this roadmap's Phase 4 describes, at `/work`. A fifth pass shipped the free-time engine and week view as this roadmap's Phase 5 describes, at `/plan` — *without* `CalendarEvent` CRUD, drag/resize sessions, or a rules-based "Plan my week" proposal, each a materially larger surface this pass's "deterministic foundation first" framing didn't call for. Each divergence is documented where it happened: §9.3-§9.4 (Home), §18.1 (persistence/Sessions/Habits), §10 (Work), §11 (Plan), §16 (what's actually implemented vs. planned), §25 (per-gap resolution status). Treat the phase descriptions below as the ordering logic and acceptance bar, not a literal changelog of what shipped when.
+**Status: Phases 1-5 shipped, plus this roadmap's Phase 7 (by actual scope, not this roadmap's numbering — see below), with real, deliberate divergence from the plan at every step, not drift.** Actual Phase 1 (`domain/`, real dates) shipped *without* `Subject`/`Deliverable` — deferred whole to a later Work phase, since nothing yet needed them and inventing them early would have been schema ahead of a consumer. Actual Phase 2 shipped persistence *and* Sessions/Habits together (this roadmap splits them into Phases 2 and 3), but *without* `UserPreferences`, a Settings page, export/import, error boundaries, or a toast/undo layer — none had anywhere to live yet (no Settings surface) or a concrete trigger (no error UI has ever needed to fire). A third pass then rebuilt Home entirely (not separately planned below — closest to this roadmap's Phase 6, done earlier because direct product input called for it). A fourth pass shipped `Subject`/`Deliverable`/`Task` CRUD as this roadmap's Phase 4 describes, at `/work`. A fifth pass shipped the free-time engine and week view as this roadmap's Phase 5 describes, at `/plan` — *without* `CalendarEvent` CRUD, drag/resize sessions, or a rules-based "Plan my week" proposal, each a materially larger surface this pass's "deterministic foundation first" framing didn't call for. A sixth pass shipped this roadmap's Phase 7 (`Habit` cadence, cadence-aware streaks/adherence, `/habits`, and `/progress` replacing `/insights`) — notably **out of this roadmap's own dependency order**, ahead of "accumulated real data" (Phase 7's stated prerequisite), by explicit product direction rather than waiting for weeks of organic usage; every Progress figure still degrades to an honest "not enough data yet" state rather than pretending that data exists. Each divergence is documented where it happened: §9.3-§9.5 (Home), §18.1 (persistence/Sessions/Habits), §10 (Work), §11 (Plan), §12 (Habits), §13 (Progress), §16 (what's actually implemented vs. planned), §25 (per-gap resolution status). Treat the phase descriptions below as the ordering logic and acceptance bar, not a literal changelog of what shipped when.
 
 ---
 
@@ -945,6 +961,46 @@ Eight phases. Ordered strictly by dependency, and deliberately front-loaded with
 **Acceptance criteria.** No AI output mutates data without explicit acceptance; plan proposals are accepted per-session, never in bulk. Every AI surface degrades to a working deterministic path when the model is unavailable, and says so. No API key reaches the client. All AI calls are user-initiated. No deterministic derivation from §16 has been replaced by a model. AI is absent from the navigation.
 
 **Do NOT build yet.** Chat · tutoring or content generation · document ingestion · autonomous/background inference · AI-authored mutations.
+
+---
+
+## 28. Product checkpoint (post Phase 7)
+
+A deliberate pause for evaluation after Work, Plan, Focus, Habits and Progress all shipped — before starting Phase 8 or any further build. Analysis only; no code changed alongside this entry.
+
+**Core value proposition, now:** Ascend is the only surface here that can compute, deterministically, "given my real deadlines, my real fixed schedule, and what I've actually logged, am I going to make it" — and show its work. That claim is real now that Work→Plan→Focus→Habits→Progress share one domain model. It is still **latent, not delivered**: nothing surfaces that answer to the user without them going and looking for it. Home stays a summary; the day and the week aren't stitched into a journey.
+
+**Ten biggest remaining gaps, ranked by impact:**
+1. **`CalendarEvent` has zero CRUD** — every free-time/workload-risk number is computed against a fictional week for every real user, permanently. The single most damaging gap: it undermines the product's one differentiated computation. ✅ **Resolved (Phase 8).** See §11's status note.
+2. **Home doesn't surface workload risk** — the thesis-defining signal (§1, §4) is real but buried on `/plan`.
+3. **No task/deliverable editing** — create/toggle/delete only; a typo means delete-and-recreate.
+4. **No onboarding/first-run flow** — a new user can't tell demo from reality, directly contradicting principle 6.
+5. **No search or filtering anywhere** — fine at seed scale, breaks down at real-term scale.
+6. **No `UserPreferences`** — waking hours, quiet hours, session length are hardcoded, wrong for anyone whose day differs. ✅ **Resolved (Phase 8).** See §6.2's status note and §15.
+7. **No cross-surface explainability** — Plan's at-risk list shows its derivation; almost nothing else does, despite principle 3.
+8. **Six-vs-five pillars was never decided** — flagged in Phase 1 as "decide before data persists," still undecided three phases later.
+9. **Navigation sends the wrong signal** — Habits/Progress (fully real) sit under mobile's "More"; a 100%-placeholder "AI Coach" keeps a first-class tab.
+10. **No export/backup** — single-device `localStorage` only, no way out for months of accumulated history.
+
+**User-facing vs. foundation:** #2, #3, #4, #5, #7, #9 are felt directly by a user. #1, #6, #8, #10 are necessary but invisible until something is built on top of them.
+
+**Per-surface verdicts:**
+- **Settings/Preferences as the next phase:** rejected in isolation — it's invisible value alone (set waking hours, nothing visibly changes, since Plan still reads fake seed events). Only matters bundled with real `CalendarEvent` entry.
+- **Plan/Calendar:** ~40% complete relative to its own spec. The free-time *math* is solid and tested; its *input* (a real week) can never be entered.
+- **Home:** not complete. Every shipped piece is honest, but §9.2's dominant-answered-question/risk-strip vision is still unbuilt three phases after Sessions/Plan made it computable. Two accessibility items flagged since Phase 2 (§22 items 3, 7) remain open.
+- **Work:** not complete enough for a real term — no edit, no search/filter, no backlog reordering, no bulk actions. Fine for a light week; not for a full course load.
+- **First-run experience:** poor. Nothing distinguishes demo content from a user's own data; the sharpest live contradiction of principle 6 anywhere in the product.
+- **What Ascend can genuinely know:** precisely what happened and when (task completions, session start/end/outcome, habit logs by real date) and everything honestly derived from that (adherence, streaks, focus trends, estimate accuracy, workload risk). It cannot know *why* — no capture point exists for intent or subjective quality, so any future insight layer is limited to outcome, not reason.
+- **AI readiness (§19.5):** most prerequisites now exist except real `CalendarEvent` data and `UserPreferences` — an AI plan proposal today would schedule around a fictional week, which is worse than no AI. NL capture (text → draft `Task`/`Deliverable`) is the one capability buildable today without waiting on anything.
+- **Misleading/redundant features:** nothing fabricated remains — that discipline held across every phase. The issue is prioritization, not dishonesty: `/ai` and `/settings` hold first-class nav slots as placeholders while real destinations (Habits, Progress) sit under "More" — the same "nav promises a product that doesn't exist" critique §7.1 made of the original app, recurring in new form. The unresolved pillar question quietly taints every pillar-grouped chart on Progress.
+
+**Recommended next 3 phases, by user value:**
+
+1. **Make Plan tell the truth** — real `CalendarEvent` CRUD + minimal `UserPreferences` (waking/quiet hours, default session length) + task/deliverable edit-in-place, bundled as one "make the foundation livable" phase. Nothing built afterward matters if the numbers underneath are fake. ✅ **Shipped as Phase 8** — `CalendarEvent` CRUD and `UserPreferences` landed; task/deliverable edit-in-place was deliberately descoped from this pass and remains open (gap #3 above).
+2. **Home becomes the decision surface** — surface Plan's existing workload-risk engine directly on Home (no new computation, just visibility) + fix the two long-open accessibility items. This is the "aha" moment the roadmap has pointed at since §4, only honestly buildable now that Phase 1 makes the numbers real.
+3. **Ready for a real first week** — first-run flow (explicit "start fresh" vs. "explore the sample," replacing silent demo seeding), search/filter on Work, data export/reset, and the five-vs-six pillar decision while it's still cheap. Adoption only matters once Phases 1–2 make the product worth adopting.
+
+Deliberately not recommended: any AI phase (blocked on real `CalendarEvent` data and accumulated Progress volume — building it now would ship a feature worse than its absence) and any new destination/screen (the gap is depth and coherence in what exists, not more surfaces).
 
 ---
 

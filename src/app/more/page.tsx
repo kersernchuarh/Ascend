@@ -5,7 +5,7 @@ import { Card } from "@/components/shared/card";
 
 const MORE_LINKS = [
   { label: "Habits", href: "/habits", icon: Repeat },
-  { label: "Insights", href: "/insights", icon: BarChart3 },
+  { label: "Progress", href: "/progress", icon: BarChart3 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 

@@ -1,6 +1,5 @@
-import { BookOpen, Droplets, Flame, Moon, MonitorOff } from "lucide-react";
-import type { Task, Deliverable, CalendarEvent, Habit, Subject } from "@/domain/types";
-import { addDays, endOfDay, startOfDay, startOfWeek } from "@/domain/time";
+import type { Task, Deliverable, CalendarEvent, Habit, Subject, UserPreferences } from "@/domain/types";
+import { addDays, endOfDay, startOfDay } from "@/domain/time";
 
 /**
  * Mock data, migrated onto the canonical domain model (PRODUCT_BLUEPRINT.md
@@ -173,31 +172,58 @@ export function createSeedDeliverables(now: Date): Deliverable[] {
   ];
 }
 
+/**
+ * Present-state demo fixed commitments — seeded once by
+ * `CalendarEventProvider` on a genuinely first-ever run, same pattern as
+ * every other seed factory. Weekly-recurring by construction (`dayOfWeek` +
+ * minute offsets — see `CalendarEvent`'s docs), so unlike the old
+ * `startAt`/`endAt` seed this doesn't need `now` to place events in "this
+ * week" — it only uses `now` for a realistic `createdAt`.
+ */
 export function createSeedCalendarEvents(now: Date): CalendarEvent[] {
-  const monday = startOfWeek(now);
-  const at = (dayOffset: number, hours: number, minutes: number): string => {
-    const d = addDays(monday, dayOffset);
-    d.setHours(hours, minutes, 0, 0);
-    return d.toISOString();
-  };
+  const createdAt = atDaysFromNow(now, -30, 9, 0);
   return [
-    { id: "c1", title: "Morning classes", startAt: at(0, 8, 0), endAt: at(0, 15, 0) },
-    { id: "c2", title: "Chemistry practical", startAt: at(2, 8, 0), endAt: at(2, 10, 0) },
-    { id: "c3", title: "Debate club", startAt: at(2, 16, 0), endAt: at(2, 17, 30) },
-    { id: "c4", title: "Morning classes", startAt: at(3, 8, 0), endAt: at(3, 15, 0) },
-    { id: "c5", title: "Morning classes", startAt: at(4, 8, 0), endAt: at(4, 15, 0) },
-    { id: "c6", title: "Study group", startAt: at(4, 16, 0), endAt: at(4, 17, 0) },
+    { id: "c1", title: "Morning classes", kind: "class", dayOfWeek: 1, startMinutes: 8 * 60, durationMinutes: 7 * 60, createdAt },
+    { id: "c2", title: "Chemistry practical", kind: "class", dayOfWeek: 3, startMinutes: 8 * 60, durationMinutes: 2 * 60, createdAt },
+    { id: "c3", title: "Debate club", kind: "cca", dayOfWeek: 3, startMinutes: 16 * 60, durationMinutes: 90, createdAt },
+    { id: "c4", title: "Morning classes", kind: "class", dayOfWeek: 4, startMinutes: 8 * 60, durationMinutes: 7 * 60, createdAt },
+    { id: "c5", title: "Morning classes", kind: "class", dayOfWeek: 5, startMinutes: 8 * 60, durationMinutes: 7 * 60, createdAt },
+    { id: "c6", title: "Study group", kind: "personal", dayOfWeek: 5, startMinutes: 16 * 60, durationMinutes: 60, createdAt },
   ];
 }
 
-/** Static habit definitions — no time dependency, unlike their logs. */
-export const SEED_HABITS: Habit[] = [
-  { id: "h1", label: "Sleep", icon: Moon, color: "primary" },
-  { id: "h2", label: "Exercise", icon: Flame, color: "orange" },
-  { id: "h3", label: "Water", icon: Droplets, color: "blue" },
-  { id: "h4", label: "Reading", icon: BookOpen, color: "teal" },
-  { id: "h5", label: "No screen before bed", icon: MonitorOff, color: "green" },
-];
+/** The one `UserPreferences` row, seeded once with the same reasonable
+ *  defaults that used to be hardcoded constants (`domain/plan`'s old
+ *  `WAKING_START_HOUR`/`WAKING_END_HOUR`, `STUDY_SESSION_SECONDS`) — real,
+ *  editable Settings state from that point forward. Quiet hours start unset:
+ *  asserting a bedtime cutoff nobody chose would be the same fabricated-
+ *  default mistake `Habit.cadence` avoided. */
+export function createDefaultPreferences(): UserPreferences {
+  return { id: "singleton", wakingStartHour: 7, wakingEndHour: 23, sessionLengthMinutes: 45 };
+}
+
+/**
+ * Present-state demo habit *definitions* — seeded once by `HabitProvider` on
+ * a genuinely first-ever run, exactly like `createSeedTasks`/
+ * `createSeedSubjects`, then real, editable, archivable state from that
+ * point forward. This is definition-only content (name, cadence, icon), not
+ * fabricated history — no `HabitLog` is ever seeded alongside these, so a
+ * new user's actual completion record starts genuinely empty regardless of
+ * how many demo habits exist (PRODUCT_BLUEPRINT.md §18.1's fabrication
+ * rule). Cadences are a deliberate, reasonable default per habit, not
+ * arbitrary: Sleep/Water/No-screen are every-day habits; Exercise/Reading
+ * are realistic few-times-a-week ones.
+ */
+export function createSeedHabits(now: Date): Habit[] {
+  const createdAt = atDaysFromNow(now, -14, 9, 0);
+  return [
+    { id: "h1", label: "Sleep", cadence: { type: "daily" }, iconKey: "sleep", color: "primary", createdAt },
+    { id: "h2", label: "Exercise", cadence: { type: "times_per_week", target: 3 }, iconKey: "exercise", color: "orange", createdAt },
+    { id: "h3", label: "Water", cadence: { type: "daily" }, iconKey: "water", color: "blue", createdAt },
+    { id: "h4", label: "Reading", cadence: { type: "times_per_week", target: 3 }, iconKey: "reading", color: "teal", createdAt },
+    { id: "h5", label: "No screen before bed", cadence: { type: "daily" }, iconKey: "screen_free", color: "green", createdAt },
+  ];
+}
 
 /** Product concepts, not working actions — see AiPreviewCard/FloatingAiButton.
  *  Shared so the desktop and mobile "coming soon" surfaces stay in sync. */
@@ -207,5 +233,3 @@ export const AI_FUTURE_ACTIONS: string[] = [
   "What should I do next?",
   "Review my week",
 ];
-
-export const STUDY_SESSION_SECONDS = 45 * 60;

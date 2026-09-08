@@ -1,5 +1,5 @@
-import type { HabitLog, StudySession } from "./types";
-import { addDays, isSameDay, startOfDay, startOfWeek, toIsoDateLocal } from "./time";
+import type { Habit, HabitLog, StudySession } from "./types";
+import { addDays, fromIsoDateLocal, isSameDay, startOfDay, startOfWeek, toIsoDateLocal } from "./time";
 
 /**
  * Pure, deterministic statistics over real behavioral records (`StudySession`,
@@ -53,21 +53,132 @@ export function weeklyActivity(sessions: StudySession[], now: Date): WeeklyActiv
   return { sessionCount: inWeek.length, totalMinutes };
 }
 
+/** Whether `habit`'s cadence expects it on the calendar day `date` falls on.
+ *  `times_per_week` has no single due day — any day can contribute toward
+ *  the week's target — so it's never individually "due". */
+export function isHabitDueOn(habit: Habit, date: Date): boolean {
+  if (habit.cadence.type === "daily") return true;
+  if (habit.cadence.type === "days_of_week") return habit.cadence.days.includes(date.getDay());
+  return false;
+}
+
+/** Active habits actually due *today* — a `times_per_week` habit always
+ *  qualifies (any day can contribute toward its weekly target); an archived
+ *  habit never does. Shared by Home's `HabitTrackerCard` and
+ *  `TodayProgressStrip` so "what's due today" can't drift between the two. */
+export function dueTodayHabits(habits: Habit[], now: Date): Habit[] {
+  return habits.filter(
+    (habit) => !habit.archivedAt && (habit.cadence.type === "times_per_week" || isHabitDueOn(habit, now))
+  );
+}
+
 /**
- * Consecutive days up to and including `now` for which `habitId` has a
- * completed log, counting backwards from today and stopping at the first
- * gap. Zero if today itself has no log — a streak that hasn't been kept up
- * today isn't "still going".
+ * Consecutive weeks (Monday-anchored) meeting a `times_per_week` habit's
+ * target, counting backward from the current week. The current week counts
+ * once it has already met target; if it hasn't yet, that's simply excluded
+ * from the streak rather than treated as a break — the week isn't over.
  */
-export function habitStreak(logs: HabitLog[], habitId: string, now: Date): number {
-  const loggedDates = new Set(logs.filter((l) => l.habitId === habitId).map((l) => l.date));
+function timesPerWeekStreak(
+  habitId: string,
+  target: number,
+  logs: HabitLog[],
+  now: Date
+): number {
+  const habitLogs = logs.filter((l) => l.habitId === habitId);
+  const countInWeek = (weekStart: Date) => {
+    const weekEnd = addDays(weekStart, 7);
+    return habitLogs.filter((l) => {
+      const d = fromIsoDateLocal(l.date);
+      return d.getTime() >= weekStart.getTime() && d.getTime() < weekEnd.getTime();
+    }).length;
+  };
+
+  let streak = 0;
+  let weekStart = startOfWeek(now);
+  let firstWeek = true;
+  for (let weeksChecked = 0; weeksChecked < 520; weeksChecked += 1) {
+    const met = countInWeek(weekStart) >= target;
+    if (firstWeek) {
+      firstWeek = false;
+      if (!met) {
+        weekStart = addDays(weekStart, -7);
+        continue;
+      }
+    } else if (!met) {
+      break;
+    }
+    streak += 1;
+    weekStart = addDays(weekStart, -7);
+  }
+  return streak;
+}
+
+/**
+ * Deterministic, cadence-aware streak (blueprint's Habits + Progress
+ * phase). Two distinct rules, not one:
+ * - `daily` / `days_of_week`: consecutive *due* days up to and including
+ *   today with a logged completion, counting backward and stopping at the
+ *   first due day with no log. A non-due day is skipped — it neither
+ *   extends nor breaks the streak. Zero if today is due and unlogged yet —
+ *   a streak that hasn't been kept up today isn't "still going" (the
+ *   original daily-only rule, preserved exactly).
+ * - `times_per_week`: see `timesPerWeekStreak` — a *week*-level streak
+ *   instead of a day-level one, since there's no individual due day to walk
+ *   backward through.
+ */
+export function habitStreak(habit: Habit, logs: HabitLog[], now: Date): number {
+  if (habit.cadence.type === "times_per_week") {
+    return timesPerWeekStreak(habit.id, habit.cadence.target, logs, now);
+  }
+  const loggedDates = new Set(logs.filter((l) => l.habitId === habit.id).map((l) => l.date));
   let streak = 0;
   let cursor = startOfDay(now);
-  while (loggedDates.has(toIsoDateLocal(cursor))) {
-    streak += 1;
+  for (let daysChecked = 0; daysChecked < 3650; daysChecked += 1) {
+    if (isHabitDueOn(habit, cursor)) {
+      if (!loggedDates.has(toIsoDateLocal(cursor))) break;
+      streak += 1;
+    }
     cursor = addDays(cursor, -1);
   }
   return streak;
+}
+
+export type HabitAdherence = { completed: number; target: number };
+
+/**
+ * "How well is this habit being kept, against its own cadence, this week?"
+ * — never an arbitrary percentage (blueprint's core complaint about the
+ * old `HabitEntry.value`).
+ * - `times_per_week`: logged-so-far this week vs the full weekly target —
+ *   no elapsed-day adjustment, since the target is whole-week by design.
+ * - `daily` / `days_of_week`: due-days-logged vs due-days-*elapsed so far*
+ *   this week (Monday through today, inclusive) — not `/7`, so a Tuesday
+ *   doesn't read as an unfair "2 of 7" before the week has even happened.
+ */
+export function habitAdherence(habit: Habit, logs: HabitLog[], now: Date): HabitAdherence {
+  const habitLogs = logs.filter((l) => l.habitId === habit.id);
+  const monday = startOfWeek(now);
+
+  if (habit.cadence.type === "times_per_week") {
+    const weekEnd = addDays(monday, 7);
+    const completed = habitLogs.filter((l) => {
+      const d = fromIsoDateLocal(l.date);
+      return d.getTime() >= monday.getTime() && d.getTime() < weekEnd.getTime();
+    }).length;
+    return { completed, target: habit.cadence.target };
+  }
+
+  const elapsedDays = Math.round((startOfDay(now).getTime() - monday.getTime()) / 86_400_000);
+  const todayIndex = Math.min(6, Math.max(0, elapsedDays));
+  let target = 0;
+  let completed = 0;
+  for (let i = 0; i <= todayIndex; i += 1) {
+    const day = addDays(monday, i);
+    if (!isHabitDueOn(habit, day)) continue;
+    target += 1;
+    if (habitLogs.some((l) => l.date === toIsoDateLocal(day))) completed += 1;
+  }
+  return { completed, target };
 }
 
 export type DayCompletion = { date: Date; completed: boolean };
@@ -75,9 +186,9 @@ export type DayCompletion = { date: Date; completed: boolean };
 /**
  * Monday-first, 7-day completion grid for `habitId`, for the calendar week
  * containing `now` (see `domain/time.startOfWeek`). Every entry reflects a
- * real logged date — there is deliberately no cadence/target concept here
- * (nothing in the product lets a user set one yet), so this can only ever
- * answer "was it logged this day", never "was the target met".
+ * real logged date — deliberately still presence-only, not cadence-aware
+ * (Home's compact summary just needs "was it logged this day"; a due/not-due
+ * distinction is `completionHistory` and the Habits page's job below).
  */
 export function weeklyCompletionGrid(
   logs: HabitLog[],
@@ -88,6 +199,25 @@ export function weeklyCompletionGrid(
   const loggedDates = new Set(logs.filter((l) => l.habitId === habitId).map((l) => l.date));
   return Array.from({ length: 7 }, (_, i) => {
     const date = addDays(monday, i);
+    return { date, completed: loggedDates.has(toIsoDateLocal(date)) };
+  });
+}
+
+/**
+ * `weeklyCompletionGrid`, generalized to `weeks` calendar weeks ending with
+ * the current one — the Habits page's longer "recent completion history"
+ * (Part 1's spec), still presence-only for the same reason.
+ */
+export function completionHistory(
+  logs: HabitLog[],
+  habitId: string,
+  now: Date,
+  weeks: number
+): DayCompletion[] {
+  const firstMonday = addDays(startOfWeek(now), -7 * (weeks - 1));
+  const loggedDates = new Set(logs.filter((l) => l.habitId === habitId).map((l) => l.date));
+  return Array.from({ length: weeks * 7 }, (_, i) => {
+    const date = addDays(firstMonday, i);
     return { date, completed: loggedDates.has(toIsoDateLocal(date)) };
   });
 }
