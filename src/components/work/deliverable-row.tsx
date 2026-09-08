@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { PillBadge } from "@/components/shared/pill-badge";
 import { WorkTaskRow } from "@/components/work/task-row";
-import { CreateTaskForm } from "@/components/work/create-task-form";
+import { TaskForm, type TaskFormInput } from "@/components/work/task-form";
+import { DeliverableForm, type DeliverableFormInput } from "@/components/work/deliverable-form";
 import { cn } from "@/lib/utils";
 import { formatDuration, formatRelativeDay } from "@/lib/format-date";
 import { deadlineRisk } from "@/domain/time";
@@ -22,8 +23,10 @@ type DeliverableRowProps = {
   sessions: StudySession[];
   now: Date;
   onToggle: () => void;
+  onUpdate: (input: DeliverableFormInput) => void;
   onDelete: () => void;
   onToggleTask: (id: string) => void;
+  onUpdateTask: (id: string, input: TaskFormInput) => void;
   onDeleteTask: (id: string) => void;
   onCreateTask: (input: Omit<Task, "id" | "createdAt">) => void;
 };
@@ -40,18 +43,36 @@ function DeliverableRow({
   sessions,
   now,
   onToggle,
+  onUpdate,
   onDelete,
   onToggleTask,
+  onUpdateTask,
   onDeleteTask,
   onCreateTask,
 }: DeliverableRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
   const pillar = PILLARS[deliverable.pillar];
   const Icon = pillar.icon;
   const isUrgent = deliverable.completedAt == null && deadlineRisk(deliverable.dueAt, now) !== "on-track";
   const linkedTasks = tasksForDeliverable(tasks, deliverable.id);
   const { done, total } = deliverableTaskProgress(tasks, deliverable.id);
   const loggedMinutes = loggedMinutesForDeliverable(sessions, tasks, deliverable.id);
+
+  if (editing) {
+    return (
+      <li className="border-b border-border py-3 last:border-0">
+        <DeliverableForm
+          initialDeliverable={deliverable}
+          onSubmit={(input) => {
+            onUpdate(input);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </li>
+    );
+  }
 
   return (
     <li className="border-b border-border py-3 last:border-0">
@@ -115,6 +136,14 @@ function DeliverableRow({
         <Button
           variant="ghost"
           size="icon-xs"
+          aria-label={`Edit "${deliverable.title}"`}
+          onClick={() => setEditing(true)}
+        >
+          <Pencil className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
           aria-label={`Delete "${deliverable.title}"`}
           onClick={onDelete}
         >
@@ -135,6 +164,7 @@ function DeliverableRow({
                   deliverable={deliverable}
                   now={now}
                   onToggle={() => onToggleTask(task.id)}
+                  onUpdate={(input) => onUpdateTask(task.id, input)}
                   onDelete={() => onDeleteTask(task.id)}
                 />
               ))}
@@ -142,7 +172,7 @@ function DeliverableRow({
           ) : (
             <p className="py-1 text-caption text-muted-foreground">No tasks yet.</p>
           )}
-          <CreateTaskForm onCreate={onCreateTask} fixedDeliverableId={deliverable.id} />
+          <TaskForm onSubmit={onCreateTask} fixedDeliverableId={deliverable.id} />
         </div>
       ) : null}
     </li>

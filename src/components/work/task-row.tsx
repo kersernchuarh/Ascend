@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Play, Trash2 } from "lucide-react";
+import { Pencil, Play, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { PillBadge } from "@/components/shared/pill-badge";
+import { TaskForm, type TaskFormInput } from "@/components/work/task-form";
 import { cn } from "@/lib/utils";
 import { formatDuration, formatRelativeDay } from "@/lib/format-date";
 import { deadlineRisk } from "@/domain/time";
@@ -19,6 +21,7 @@ type WorkTaskRowProps = {
   deliverable?: Deliverable;
   now: Date;
   onToggle: () => void;
+  onUpdate: (input: TaskFormInput) => void;
   onDelete: () => void;
 };
 
@@ -26,11 +29,28 @@ type WorkTaskRowProps = {
  *  real delete instead of Home's "remove from today" — see
  *  `components/dashboard/task-row.tsx` for the Today's Focus variant this
  *  deliberately doesn't share a component with (different action sets). */
-function WorkTaskRow({ task, deliverable, now, onToggle, onDelete }: WorkTaskRowProps) {
+function WorkTaskRow({ task, deliverable, now, onToggle, onUpdate, onDelete }: WorkTaskRowProps) {
+  const [editing, setEditing] = useState(false);
   const pillar = PILLARS[task.pillar];
   const Icon = pillar.icon;
   const dueAt = effectiveDueAt(task, deliverable);
   const isUrgent = dueAt ? deadlineRisk(dueAt, now) !== "on-track" : false;
+
+  if (editing) {
+    return (
+      <li className="border-b border-border py-2.5 last:border-0">
+        <TaskForm
+          initialTask={task}
+          fixedDeliverableId={task.deliverableId}
+          onSubmit={(input) => {
+            onUpdate(input);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </li>
+    );
+  }
 
   return (
     <li className="flex items-start gap-2 border-b border-border py-2.5 last:border-0">
@@ -71,6 +91,9 @@ function WorkTaskRow({ task, deliverable, now, onToggle, onDelete }: WorkTaskRow
           <Link href={`/focus?task=${task.id}`}>
             <Play className="size-3.5" />
           </Link>
+        </Button>
+        <Button variant="ghost" size="icon-xs" aria-label={`Edit "${task.title}"`} onClick={() => setEditing(true)}>
+          <Pencil className="size-3.5" />
         </Button>
         <Button variant="ghost" size="icon-xs" aria-label={`Delete "${task.title}"`} onClick={onDelete}>
           <Trash2 className="size-3.5" />

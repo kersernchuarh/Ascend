@@ -6,31 +6,40 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PillarPicker } from "@/components/shared/pillar-picker";
 import { useSubjects } from "@/state/subject-context";
-import { endOfDay, fromIsoDateLocal } from "@/domain/time";
+import { endOfDay, fromIsoDateLocal, toIsoDateLocal } from "@/domain/time";
 import type { PillarId } from "@/lib/pillars";
 import type { Deliverable } from "@/domain/types";
 
-type CreateDeliverableFormProps = {
-  onCreate: (input: Omit<Deliverable, "id" | "createdAt">) => void;
+export type DeliverableFormInput = Omit<Deliverable, "id" | "createdAt">;
+
+type DeliverableFormProps = {
+  /** Pass an existing deliverable to edit it in place, pre-filled. */
+  initialDeliverable?: Deliverable;
+  onSubmit: (input: DeliverableFormInput) => void;
+  onCancel?: () => void;
 };
 
 /**
- * The fast path is two fields — title and a due date, the two things that
- * make something a *deliverable* rather than a task (PRODUCT_BLUEPRINT.md
- * §6.1). Subject, estimate, pillar and notes sit behind "More", per Step 5's
- * progressive-disclosure direction. Day-granularity only (no time-of-day
- * picker): every seeded deliverable is already day-granularity, and adding a
- * time field here would be schema ahead of any real need for one.
+ * Create and edit share one form — the same "no second representation of
+ * the same fields" reasoning `plan/event-form.tsx` already established for
+ * `CalendarEvent`. Replaces `CreateDeliverableForm`, which only ever
+ * created. The fast path stays title + due date; subject/estimate/pillar/
+ * notes sit behind "More", open by default when editing (a user editing
+ * already has a reason to see the fuller fields, unlike a fresh add).
  */
-function CreateDeliverableForm({ onCreate }: CreateDeliverableFormProps) {
+function DeliverableForm({ initialDeliverable, onSubmit, onCancel }: DeliverableFormProps) {
   const { subjects } = useSubjects();
-  const [expanded, setExpanded] = useState(false);
-  const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [subjectId, setSubjectId] = useState("");
-  const [pillar, setPillar] = useState<PillarId>("academics");
-  const [estimate, setEstimate] = useState("");
-  const [description, setDescription] = useState("");
+  const [expanded, setExpanded] = useState(!!initialDeliverable);
+  const [title, setTitle] = useState(initialDeliverable?.title ?? "");
+  const [dueDate, setDueDate] = useState(
+    initialDeliverable ? toIsoDateLocal(new Date(initialDeliverable.dueAt)) : ""
+  );
+  const [subjectId, setSubjectId] = useState(initialDeliverable?.subjectId ?? "");
+  const [pillar, setPillar] = useState<PillarId>(initialDeliverable?.pillar ?? "academics");
+  const [estimate, setEstimate] = useState(
+    initialDeliverable?.estimateMinutes != null ? String(initialDeliverable.estimateMinutes) : ""
+  );
+  const [description, setDescription] = useState(initialDeliverable?.description ?? "");
 
   function reset() {
     setTitle("");
@@ -45,7 +54,7 @@ function CreateDeliverableForm({ onCreate }: CreateDeliverableFormProps) {
     event.preventDefault();
     const trimmedTitle = title.trim();
     if (!trimmedTitle || !dueDate) return;
-    onCreate({
+    onSubmit({
       title: trimmedTitle,
       pillar,
       subjectId: subjectId || undefined,
@@ -53,8 +62,9 @@ function CreateDeliverableForm({ onCreate }: CreateDeliverableFormProps) {
       allDay: true,
       estimateMinutes: estimate ? Number(estimate) : undefined,
       description: description.trim() || undefined,
+      completedAt: initialDeliverable?.completedAt,
     });
-    reset();
+    if (!initialDeliverable) reset();
   }
 
   return (
@@ -64,7 +74,7 @@ function CreateDeliverableForm({ onCreate }: CreateDeliverableFormProps) {
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="New deliverable — e.g. Chemistry lab report"
-          aria-label="New deliverable title"
+          aria-label={initialDeliverable ? "Deliverable title" : "New deliverable title"}
           className="min-w-[220px] flex-1"
         />
         <Input
@@ -74,20 +84,31 @@ function CreateDeliverableForm({ onCreate }: CreateDeliverableFormProps) {
           aria-label="Due date"
           className="w-[150px]"
         />
-        <Button type="submit" size="icon" aria-label="Add deliverable" disabled={!title.trim() || !dueDate}>
-          <Plus className="size-4" />
-        </Button>
         <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="gap-1"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((prev) => !prev)}
+          type="submit"
+          size={initialDeliverable ? "sm" : "icon"}
+          aria-label={initialDeliverable ? "Save changes" : "Add deliverable"}
+          disabled={!title.trim() || !dueDate}
         >
-          {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-          More
+          {initialDeliverable ? "Save" : <Plus className="size-4" />}
         </Button>
+        {onCancel ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((prev) => !prev)}
+          >
+            {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+            More
+          </Button>
+        )}
       </div>
       {expanded ? (
         <div className="flex flex-col gap-3 rounded-[10px] border border-border p-3">
@@ -120,7 +141,7 @@ function CreateDeliverableForm({ onCreate }: CreateDeliverableFormProps) {
               className="w-20"
             />
           </div>
-          <PillarPicker value={pillar} onChange={setPillar} label="Pillar for new deliverable" />
+          <PillarPicker value={pillar} onChange={setPillar} label="Pillar for deliverable" />
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
@@ -135,4 +156,4 @@ function CreateDeliverableForm({ onCreate }: CreateDeliverableFormProps) {
   );
 }
 
-export { CreateDeliverableForm };
+export { DeliverableForm };
