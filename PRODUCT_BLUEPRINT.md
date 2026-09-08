@@ -220,6 +220,8 @@ Proposed set: **Academics, Health, Mind, Growth, Relationships** (renaming `life
 
 *Cost, stated honestly:* touches `PILLARS`, the colour maps, the donut, the seed data, and any persisted records — so it should happen in Phase 1, before persistence, or not at all. *Benefit:* the balance score becomes conceptually defensible, and "Life" stops being a junk drawer. If you disagree, the fallback is to keep six pillars but define each in one sentence in code and stop using Productivity as a tag on tasks.
 
+> **Status: ✅ Resolved.** Executed exactly as recommended, eight phases later than "before persistence" but before any *real* user data existed (only seed/demo records were ever pillar-tagged) — `productivity` dropped, `life` renamed to `relationships`. `relationships` took `primary` (previously `productivity`'s color slot), which is what actually resolves the red half of §24 item 1's pillar/status color collision: `red` is used by zero pillars now. Seed data reassigned by hand (`Call mom` → relationships; `Reply to club email`, `Club meeting prep` → growth, both being club/extracurricular organizing rather than personal relationships). Renaming a five-item union type is a one-file change (`lib/pillars.ts`) plus its two hardcoded order arrays (`PillarPicker`, seed data) — `tsc` catches every other call site automatically since `PillarId` is a closed union.
+
 ---
 
 ## 7. Information architecture
@@ -765,7 +767,7 @@ Add a **React error boundary** per route segment and a **toast/feedback primitiv
 
 **Must fix:**
 
-1. **Not yet fixed.** Separate semantic status colours from pillar identity colours. Today `red` means both *Life pillar* and *urgent/destructive*, and `orange` means both *Growth* and *needs attention* — the Home redesign's due-date risk chips (`TaskRow`, `UpcomingCard`) still reuse pillar red for urgency, the same collision as before. Genuinely still open; worth doing before Plan/Work introduce more risk states.
+1. **Mostly fixed (pillar consolidation, §6.4).** The damaging half of the collision — `red` meaning both *Life pillar* and *urgent/destructive* — is gone: dropping `productivity` and renaming `life` → `relationships` freed a color (`relationships` took `primary`, `productivity`'s old slot), so `red` is now used by **zero** pillars and is purely a semantic status color everywhere (`TaskRow`, `AttentionCard`, deliverable risk chips). **Residual, lower-severity, still open:** `orange` remains both *Growth*'s identity and the "needs attention"/"tight" caution color (e.g. Today's Plan's over-capacity warning) — all 5 remaining `AccentColor` values are now claimed by a pillar, leaving none free for a distinct caution tier without adding a new color. Deliberately not solved here: expanding `AccentColor` for one caution state is a bigger design change than this phase's "decide the pillar question" scope called for.
 2. ✅ **Fixed.** `SectionHeader` takes a `level?: 2 | 3` prop (§22).
 3. ✅ **Fixed.** The topbar's `<h1>` is the page's only heading now; there's no second `<h1>`/`text-h3` pairing to disagree with (§8, §22).
 
@@ -815,9 +817,9 @@ Everything currently making Ascend feel like a prototype, ranked strictly by pro
 | # | Gap | Status |
 | --- | --- | --- |
 | 12 | No loading/error/success state system; no error boundaries; no feedback layer | **Partial.** Loading and success states real (§23); no error boundaries, no toast/feedback layer, no user-facing storage-error message yet. |
-| 13 | No user preferences (45-min timer hardcoded; no targets, no waking hours) | **Still open.** `STUDY_SESSION_SECONDS` is still a hardcoded constant; no Settings surface exists. |
+| 13 | No user preferences (45-min timer hardcoded; no targets, no waking hours) | ✅ **Resolved (Phase 8).** Real `UserPreferences` + `/settings`; `STUDY_SESSION_SECONDS` deleted. |
 | 14 | Accessibility defects (duplicate `h1`, heading order, small targets, non-focusable controls) | **Partial — see §22 for the itemized, honest status.** Duplicate `h1` and heading order fixed; small targets (task row hit area) and the timer's announcement cadence remain open. |
-| 15 | Pillar/status colour collision | **Still open — confirmed still present** in the Home redesign's new risk chips (§24 item 1). Not addressed this session. |
+| 15 | Pillar/status colour collision | **Mostly resolved (pillar consolidation, §6.4/§24 item 1).** The `red` half is gone (no pillar uses it anymore); the `orange`/Growth-vs-caution half remains, lower severity. |
 | 16 | No tests around the store or derivations — the derivation catalogue (§16) is exactly what deserves unit tests |
 | 17 | `CALENDAR_PREVIEW` hardcoded to a specific week — already wrong on any real date |
 | 18 | No export/import |
@@ -996,7 +998,7 @@ A deliberate pause for evaluation after Work, Plan, Focus, Habits and Progress a
 5. **No search or filtering anywhere** — fine at seed scale, breaks down at real-term scale.
 6. **No `UserPreferences`** — waking hours, quiet hours, session length are hardcoded, wrong for anyone whose day differs. ✅ **Resolved (Phase 8).** See §6.2's status note and §15.
 7. **No cross-surface explainability** — Plan's at-risk list shows its derivation; almost nothing else does, despite principle 3.
-8. **Six-vs-five pillars was never decided** — flagged in Phase 1 as "decide before data persists," still undecided three phases later.
+8. **Six-vs-five pillars was never decided** — flagged in Phase 1 as "decide before data persists," still undecided three phases later. ✅ **Resolved.** See §6.4's status note.
 9. **Navigation sends the wrong signal** — Habits/Progress (fully real) sit under mobile's "More"; a 100%-placeholder "AI Coach" keeps a first-class tab.
 10. **No export/backup** — single-device `localStorage` only, no way out for months of accumulated history.
 

@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { PILLARS, type PillarId } from "@/lib/pillars";
 
-const PILLAR_ORDER: PillarId[] = ["academics", "health", "mind", "growth", "life", "productivity"];
+const PILLAR_ORDER: PillarId[] = ["academics", "health", "mind", "growth", "relationships"];
 
 type PillarPickerProps = {
   value: PillarId;
