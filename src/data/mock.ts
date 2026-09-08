@@ -16,24 +16,33 @@ export type NavItem = {
   icon: LucideIcon;
 };
 
+// Ordered by what's real, not what's aspirational (PRODUCT_BLUEPRINT.md §28
+// gap #9): every one of these five is a fully working destination. `AI
+// Coach` — still a placeholder (§14, §19) — moved to the footer nav below,
+// alongside Settings, rather than holding a primary slot a real surface
+// could occupy.
 export const SIDEBAR_NAV: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
   { label: "Work", href: "/work", icon: CheckSquare },
   { label: "Plan", href: "/plan", icon: Calendar },
   { label: "Habits", href: "/habits", icon: Repeat },
   { label: "Progress", href: "/progress", icon: BarChart3 },
-  { label: "AI Coach", href: "/ai", icon: Sparkles },
 ];
 
 export const SIDEBAR_FOOTER_NAV: NavItem[] = [
+  { label: "AI Coach", href: "/ai", icon: Sparkles },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
+// Mobile has only 5 tab slots; `Habits` (a daily, one-tap-to-log surface)
+// earns the primary slot over `Progress` (a weekly-review surface, checked
+// far less often) — `Progress` moves into `More` alongside it, matching
+// where `AI Coach` already belonged.
 export const MOBILE_NAV: NavItem[] = [
   { label: "Home", href: "/", icon: Home },
   { label: "Work", href: "/work", icon: CheckSquare },
   { label: "Plan", href: "/plan", icon: Calendar },
-  { label: "AI", href: "/ai", icon: Sparkles },
+  { label: "Habits", href: "/habits", icon: Repeat },
   { label: "More", href: "/more", icon: MoreHorizontal },
 ];
 

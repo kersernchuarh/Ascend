@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { BarChart3, ChevronRight, Repeat, Settings } from "lucide-react";
+import { BarChart3, ChevronRight, Settings, Sparkles } from "lucide-react";
 import { SectionHeader } from "@/components/shared/section-header";
 import { Card } from "@/components/shared/card";
 
 const MORE_LINKS = [
-  { label: "Habits", href: "/habits", icon: Repeat },
   { label: "Progress", href: "/progress", icon: BarChart3 },
+  { label: "AI Coach", href: "/ai", icon: Sparkles },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
