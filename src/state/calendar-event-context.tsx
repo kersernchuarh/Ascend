@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createSeedCalendarEvents } from "@/data/dashboard";
+import { getOnboardingChoice } from "@/persistence/onboarding";
 import { useNow } from "@/domain/use-now";
 import { createRepository } from "@/persistence/repository";
 import type { CalendarEvent } from "@/domain/types";
@@ -48,12 +49,15 @@ export function CalendarEventProvider({ children }: { children: ReactNode }) {
         hydratedRef.current = true;
         setEvents(persisted);
         setStatus("ready");
-      } else if (now) {
+      } else if (now && getOnboardingChoice() === "sample") {
         const seeded = createSeedCalendarEvents(now);
         hydratedRef.current = true;
         setEvents(seeded);
         setStatus("ready");
         void calendarEventRepository.replaceAll(seeded);
+      } else if (now) {
+        hydratedRef.current = true;
+        setStatus("ready");
       }
     })();
     return () => {

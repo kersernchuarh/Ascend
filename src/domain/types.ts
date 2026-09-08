@@ -149,6 +149,12 @@ export type UserPreferences = {
   quietHoursEnd?: number;
   /** Minutes — replaces the hardcoded `STUDY_SESSION_SECONDS`. */
   sessionLengthMinutes: number;
+  /** Set the instant the user picks "start fresh" or "explore the sample"
+   *  on first run; `undefined` is what actually gates the welcome screen
+   *  (`components/onboarding/welcome-screen.tsx`) — never backfilled or
+   *  assumed, since a missing value here is a real, meaningful "hasn't
+   *  decided yet", not an oversight to paper over with a default. */
+  onboardingCompletedAt?: string;
 };
 
 /**
