@@ -6,6 +6,7 @@ import { SubjectProvider } from "@/state/subject-context";
 import { DeliverableProvider } from "@/state/deliverable-context";
 import { TaskProvider } from "@/state/task-context";
 import { SessionProvider } from "@/state/session-context";
+import { ActiveSessionProvider } from "@/state/active-session-context";
 import { HabitProvider } from "@/state/habit-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -21,13 +22,13 @@ type AppShellProps = {
 // when the user moves between pages. Persistence (Phase 2) is what makes
 // that state survive a full reload too, not just navigation.
 //
-// Provider nesting is 8 deep as of this phase (Sidebar → Preferences →
-// CalendarEvent → Subject → Deliverable → Task → Session → Habit) — past
-// the "~4 levels" reconsideration threshold §17 named back at Phase 2. Not
-// addressed here: this phase's scope is CalendarEvent CRUD and Preferences,
-// not a store-architecture rewrite (flagged again in the Phase 7 checkpoint,
-// §28, as real, disclosed technical debt rather than something to fix
-// incidentally while adding an unrelated feature).
+// Provider nesting is 9 deep as of the Home v2 redesign (Sidebar →
+// Preferences → CalendarEvent → Subject → Deliverable → Task → Session →
+// ActiveSession → Habit) — past the "~4 levels" reconsideration threshold
+// §17 named back at Phase 2. Not addressed here: still real, disclosed
+// technical debt (§28), not a store-architecture rewrite. `ActiveSession`
+// must nest inside `Session` (it calls `recordSession` directly) but has no
+// other ordering requirement, so it's placed immediately after it.
 function AppShell({ children }: AppShellProps) {
   return (
     <SidebarProvider>
@@ -37,19 +38,21 @@ function AppShell({ children }: AppShellProps) {
             <DeliverableProvider>
               <TaskProvider>
                 <SessionProvider>
-                  <HabitProvider>
-                    <div className="flex min-h-screen w-full">
-                      <Sidebar />
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <Topbar />
-                        <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
-                          <div className="mx-auto w-full max-w-[1440px]">{children}</div>
-                        </main>
+                  <ActiveSessionProvider>
+                    <HabitProvider>
+                      <div className="flex min-h-screen w-full">
+                        <Sidebar />
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <Topbar />
+                          <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
+                            <div className="mx-auto w-full max-w-[1440px]">{children}</div>
+                          </main>
+                        </div>
                       </div>
-                    </div>
-                    <MobileBottomNav />
-                    <FloatingAiButton />
-                  </HabitProvider>
+                      <MobileBottomNav />
+                      <FloatingAiButton />
+                    </HabitProvider>
+                  </ActiveSessionProvider>
                 </SessionProvider>
               </TaskProvider>
             </DeliverableProvider>

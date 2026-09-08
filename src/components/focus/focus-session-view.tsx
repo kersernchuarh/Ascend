@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, Pause, Play, RotateCcw } from "lucide-react";
@@ -9,7 +9,8 @@ import { PillBadge } from "@/components/shared/pill-badge";
 import { useTasks } from "@/state/task-context";
 import { useSessions } from "@/state/session-context";
 import { usePreferences } from "@/state/preferences-context";
-import { isMeaningfulSessionDuration, sessionsOnDay, totalFocusedMinutes } from "@/domain/metrics";
+import { useActiveSession } from "@/state/active-session-context";
+import { sessionsOnDay, totalFocusedMinutes } from "@/domain/metrics";
 import { useNow } from "@/domain/use-now";
 import { formatDuration } from "@/lib/format-date";
 import { PILLARS } from "@/lib/pillars";
@@ -19,125 +20,46 @@ const RADIUS = 110;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /**
- * A dedicated experience, not a dashboard widget — moved off Home per
- * explicit product direction. Same underlying mechanics as the old
- * StudyTimerCard (deleted), scaled up and given a real completion moment
- * instead of just stopping at 00:00. No gamification: one calm
- * confirmation, no streaks-of-sessions, no celebratory animation beyond a
- * plain checkmark.
+ * A dedicated experience, not a dashboard widget. The countdown itself now
+ * lives in `state/active-session-context.tsx`, shared with Home, so this
+ * view is really just the full-screen presentation of whatever that context
+ * says is happening — starting/pausing/ending a session, and the picker for
+ * choosing a task before one begins.
  */
 function FocusSessionView() {
   const searchParams = useSearchParams();
   const taskIdFromUrl = searchParams.get("task") ?? "";
 
   const { todayTasks } = useTasks();
-  const { sessions, recordSession, status: sessionStatus } = useSessions();
+  const { sessions, status: sessionStatus } = useSessions();
   const { preferences } = usePreferences();
+  const { session, completedSession, startSession, toggleRunning, endSession, resetToFresh } =
+    useActiveSession();
   const now = useNow();
 
   const sessionLengthSeconds = preferences.sessionLengthMinutes * 60;
-  const [secondsLeft, setSecondsLeft] = useState(sessionLengthSeconds);
-  const [isRunning, setIsRunning] = useState(false);
-  const [actualStart, setActualStart] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState(taskIdFromUrl);
-  const [completedSession, setCompletedSession] = useState<StudySession | null>(null);
-  const recordedRef = useRef(false);
 
   const availableTasks = todayTasks.filter((task) => !task.completedAt);
-  const selectedTask = todayTasks.find((task) => task.id === selectedTaskId);
+  const activeTaskId = session?.taskId ?? selectedTaskId;
+  const selectedTask = todayTasks.find((task) => task.id === activeTaskId);
 
-  // `PreferencesProvider` hydrates asynchronously — `preferencesRepository
-  // .getAll()` is always at least one effect-cycle after first render, even
-  // though the underlying `localStorage` read itself is fast — so a
-  // customized session length is *never* reflected in `secondsLeft`'s
-  // initial value above; this isn't a rare race, it happens on every mount
-  // for anyone who isn't using the 45-minute default. Sync it here, but
-  // only while the timer hasn't actually started (a running/paused
-  // countdown must never jump mid-session just because this effect re-runs).
-  // An intentional exception to the lint rule below, matching the existing
-  // `useNow`/`NowPanel` pattern.
-  useEffect(() => {
-    if (actualStart) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSecondsLeft(sessionLengthSeconds);
-  }, [sessionLengthSeconds, actualStart]);
+  const isFresh = session == null;
+  const secondsLeft = session?.secondsLeft ?? sessionLengthSeconds;
+  const totalSeconds = session?.sessionLengthSeconds ?? sessionLengthSeconds;
 
-  useEffect(() => {
-    if (!isRunning) return;
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          setIsRunning(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isRunning]);
-
-  useEffect(() => {
-    if (secondsLeft === 0 && actualStart && !recordedRef.current) {
-      finalizeSession(actualStart, selectedTaskId, "completed");
+  function handleToggle() {
+    if (isFresh) {
+      startSession(selectedTaskId || undefined, sessionLengthSeconds);
+    } else {
+      toggleRunning();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [secondsLeft, actualStart]);
-
-  function finalizeSession(start: string, taskId: string, outcome: "completed" | "abandoned") {
-    recordedRef.current = true;
-    const plannedEnd = new Date(
-      new Date(start).getTime() + sessionLengthSeconds * 1000
-    ).toISOString();
-    const session: StudySession = {
-      id: crypto.randomUUID(),
-      taskId: taskId || undefined,
-      plannedStart: start,
-      plannedEnd,
-      actualStart: start,
-      actualEnd: new Date().toISOString(),
-      outcome,
-    };
-    recordSession(session);
-    setCompletedSession(session);
   }
 
   const minutes = Math.floor(secondsLeft / 60).toString().padStart(2, "0");
   const seconds = (secondsLeft % 60).toString().padStart(2, "0");
-  const progress = (sessionLengthSeconds - secondsLeft) / sessionLengthSeconds;
+  const progress = (totalSeconds - secondsLeft) / totalSeconds;
   const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
-  // `!actualStart` alone is a complete signal: `resetToFresh` always clears
-  // both `actualStart` and `secondsLeft` together, so there's no state where
-  // the session is genuinely fresh but `actualStart` is still set. (Also
-  // deliberately not `secondsLeft === sessionLengthSeconds` — that pairing
-  // broke the moment a customized `sessionLengthSeconds` loaded from
-  // preferences after `secondsLeft`'s initial value was already set.)
-  const isFresh = !actualStart;
-
-  function handleToggle() {
-    if (!isRunning && !actualStart) {
-      setActualStart(new Date().toISOString());
-    }
-    setIsRunning((prev) => !prev);
-  }
-
-  function handleEndOrReset() {
-    if (actualStart && !recordedRef.current) {
-      const elapsedSeconds = sessionLengthSeconds - secondsLeft;
-      if (isMeaningfulSessionDuration(elapsedSeconds)) {
-        finalizeSession(actualStart, selectedTaskId, "abandoned");
-        return; // completedSession now drives the confirmation view
-      }
-    }
-    resetToFresh();
-  }
-
-  function resetToFresh() {
-    setIsRunning(false);
-    setSecondsLeft(sessionLengthSeconds);
-    setActualStart(null);
-    recordedRef.current = false;
-    setCompletedSession(null);
-  }
 
   const todaysSessions = now ? sessionsOnDay(sessions, now) : [];
   const todaysMinutes = now ? totalFocusedMinutes(sessions, now) : 0;
@@ -227,14 +149,14 @@ function FocusSessionView() {
 
             <div className="flex items-center gap-3">
               <Button onClick={handleToggle} size="lg" className="gap-2">
-                {isRunning ? <Pause className="size-4" /> : <Play className="size-4" />}
-                {isFresh ? "Start Focus Session" : isRunning ? "Pause" : "Resume"}
+                {session?.isRunning ? <Pause className="size-4" /> : <Play className="size-4" />}
+                {isFresh ? "Start Focus Session" : session?.isRunning ? "Pause" : "Resume"}
               </Button>
               {!isFresh ? (
                 <Button
                   variant="ghost"
                   size="icon-lg"
-                  onClick={handleEndOrReset}
+                  onClick={endSession}
                   aria-label="End session"
                 >
                   <RotateCcw className="size-4" />
