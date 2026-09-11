@@ -23,7 +23,7 @@ function HabitTrackerCard() {
   const loggedCount = dueToday.filter((habit) => isCompletedToday(habit.id)).length;
 
   return (
-    <Card className="w-full">
+    <Card className="w-full" flat>
       <CardContent className="flex flex-col gap-4">
         <SectionHeader
           title="Habit Tracker"

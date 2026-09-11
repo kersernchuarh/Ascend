@@ -95,7 +95,7 @@ function TodayPlanCard() {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full" emphasis>
       <CardContent>
         {session ? (
           <ActiveSessionBanner taskTitle={activeTask?.title} secondsLeft={session.secondsLeft} isRunning={session.isRunning} />

@@ -30,7 +30,7 @@ function UndoToast({ action, onDismiss }: { action: UndoableAction; onDismiss: (
       aria-live="polite"
       className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 sm:bottom-6"
     >
-      <div className="flex items-center gap-3 rounded-[10px] border border-border bg-surface-2 px-4 py-2.5 shadow-lg">
+      <div className="flex items-center gap-3 rounded-[10px] border border-border bg-surface-2 px-4 py-2.5 shadow-lg motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200">
         <span className="text-body text-foreground">{action.message}</span>
         <Button
           type="button"

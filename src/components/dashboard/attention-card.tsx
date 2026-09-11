@@ -72,7 +72,7 @@ function AttentionCard() {
   const conflictToday = ready && now ? dayHasConflict(now, events, tasks) : false;
 
   return (
-    <Card id="attention" className="w-full scroll-mt-20">
+    <Card id="attention" className="w-full scroll-mt-20" flat>
       <CardContent>
         <SectionHeader title="Attention" description="Where the numbers don't add up" />
         {!ready || !now ? (

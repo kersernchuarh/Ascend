@@ -47,7 +47,7 @@ export default function PlanPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
+      <Card emphasis>
         <CardContent className="flex flex-col gap-4">
           <SectionHeader
             level={2}
@@ -79,7 +79,7 @@ export default function PlanPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card flat>
         <CardContent className="flex flex-col gap-4">
           <SectionHeader title="Your fixed schedule" description="Classes, CCAs, and appointments that repeat every week" />
           {!ready ? (
@@ -97,7 +97,7 @@ export default function PlanPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card flat>
         <CardContent className="flex flex-col gap-4">
           <SectionHeader title="At risk" description="Deadlines where the numbers don't add up" />
           {!ready ? (

@@ -171,7 +171,7 @@ export default function WorkPage() {
         </div>
       ) : null}
 
-      <Card>
+      <Card emphasis>
         <CardContent className="flex flex-col gap-4">
           <SectionHeader
             level={2}
@@ -256,7 +256,7 @@ export default function WorkPage() {
       </Card>
 
       {!ready || hasAnything ? (
-        <Card>
+        <Card flat>
           <CardContent className="flex flex-col gap-4">
             <SectionHeader title="Other tasks" description="Not tied to any deliverable" />
             <TaskForm onSubmit={(input) => addTask(input)} />

@@ -74,7 +74,7 @@ function ScheduleCard() {
   }, [now, events, tasks, sessions, preferences]);
 
   return (
-    <Card id="schedule" className="w-full scroll-mt-20">
+    <Card id="schedule" className="w-full scroll-mt-20" flat>
       <CardContent>
         <SectionHeader title="Schedule" description="Today's fixed commitments" />
         {!ready ? (
