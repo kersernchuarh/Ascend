@@ -141,7 +141,7 @@ function DeliverableForm({ initialDeliverable, onSubmit, onCancel }: Deliverable
               className="w-20"
             />
           </div>
-          <PillarPicker value={pillar} onChange={setPillar} label="Pillar for deliverable" />
+          <PillarPicker value={pillar} onChange={(p) => setPillar(p ?? "academics")} label="Pillar for deliverable" />
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}

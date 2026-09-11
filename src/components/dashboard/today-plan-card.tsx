@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Pause, Play, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TaskRow } from "@/components/dashboard/task-row";
-import { AddTaskRow } from "@/components/dashboard/add-task-row";
+import { AddTaskRow, type QuickCaptureInput } from "@/components/dashboard/add-task-row";
 import { AddExistingTaskRow } from "@/components/dashboard/add-existing-task-row";
+import { UndoToast, type UndoableAction } from "@/components/shared/undo-toast";
 import { useTasks } from "@/state/task-context";
 import { useDeliverables } from "@/state/deliverable-context";
 import { useSessions } from "@/state/session-context";
@@ -19,7 +20,6 @@ import { useNow } from "@/domain/use-now";
 import { isDueToday } from "@/domain/time";
 import { freeMinutesForDay } from "@/domain/plan";
 import { formatDuration } from "@/lib/format-date";
-import type { PillarId } from "@/lib/pillars";
 
 /**
  * The centerpiece of Home — merges the old `NowPanel` (the "what do I do
@@ -49,6 +49,7 @@ function TodayPlanCard() {
   const { preferences } = usePreferences();
   const { session } = useActiveSession();
   const now = useNow();
+  const [lastAction, setLastAction] = useState<UndoableAction | null>(null);
 
   const deliverableById = useMemo(
     () => new Map(deliverables.map((d) => [d.id, d])),
@@ -83,9 +84,9 @@ function TodayPlanCard() {
     return { text: "You have enough time for today's plan", tight: false };
   }, [tasks, allTasks, sessions, events, preferences, now, status]);
 
-  function handleAdd(title: string, pillar: PillarId) {
+  function handleAdd(input: QuickCaptureInput) {
     if (!now) return;
-    addTask({ title, pillar, scheduledFor: now.toISOString() });
+    addTask({ ...input, scheduledFor: now.toISOString() });
   }
 
   function handleScheduleExisting(id: string) {
@@ -124,6 +125,9 @@ function TodayPlanCard() {
           title="Today's Plan"
           description={status === "ready" ? `${completedCount}/${tasks.length} completed` : undefined}
         />
+        <p className="mt-1 text-caption text-muted-foreground">
+          You choose what&apos;s on today — Ascend doesn&apos;t build a schedule for you yet, only warns if it looks like too much.
+        </p>
         {fitMessage ? (
           <p
             className={
@@ -161,10 +165,26 @@ function TodayPlanCard() {
                 now={now ?? new Date()}
                 isFirst={index === 0}
                 isLast={index === tasks.length - 1}
-                onToggle={() => toggleTask(task.id)}
+                onToggle={() => {
+                  const wasIncomplete = !task.completedAt;
+                  toggleTask(task.id);
+                  setLastAction(
+                    wasIncomplete
+                      ? { message: `Completed "${task.title}"`, undo: () => toggleTask(task.id) }
+                      : null
+                  );
+                }}
                 onMoveUp={() => moveTaskInToday(task.id, "up")}
                 onMoveDown={() => moveTaskInToday(task.id, "down")}
-                onRemove={() => removeFromToday(task.id)}
+                onRemove={() => {
+                  const previousScheduledFor = task.scheduledFor;
+                  removeFromToday(task.id);
+                  setLastAction({
+                    message: `Deferred "${task.title}" — its deadline is unchanged`,
+                    undo: () => updateTask(task.id, { scheduledFor: previousScheduledFor }),
+                  });
+                }}
+                onUpdate={(input) => updateTask(task.id, input)}
               />
             ))}
           </ul>
@@ -176,6 +196,7 @@ function TodayPlanCard() {
           </>
         ) : null}
       </CardContent>
+      {lastAction ? <UndoToast action={lastAction} onDismiss={() => setLastAction(null)} /> : null}
     </Card>
   );
 }

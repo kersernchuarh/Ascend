@@ -103,6 +103,14 @@ describe("workloadByPillar", () => {
     ];
     expect(workloadByPillar(tasks, [])).toEqual([]);
   });
+
+  it("excludes a quick-captured task with no pillar assigned, without crashing", () => {
+    const tasks = [
+      task({ id: "a", pillar: undefined, estimateMinutes: 30 }),
+      task({ id: "b", pillar: "health", estimateMinutes: 20 }),
+    ];
+    expect(workloadByPillar(tasks, [])).toEqual([{ pillar: "health", remainingMinutes: 20 }]);
+  });
 });
 
 describe("estimateAccuracy", () => {

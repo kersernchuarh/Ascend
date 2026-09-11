@@ -42,13 +42,15 @@ function TaskForm({ initialTask, onSubmit, onCancel, fixedDeliverableId }: TaskF
   const [estimate, setEstimate] = useState(
     initialTask?.estimateMinutes != null ? String(initialTask.estimateMinutes) : ""
   );
-  const [pillar, setPillar] = useState<PillarId>(initialTask?.pillar ?? "academics");
+  const [pillar, setPillar] = useState<PillarId | undefined>(initialTask?.pillar);
+  const [notes, setNotes] = useState(initialTask?.notes ?? "");
 
   function reset() {
     setTitle("");
     setDueDate("");
     setEstimate("");
-    setPillar("academics");
+    setPillar(undefined);
+    setNotes("");
     if (!fixedDeliverableId) setDeliverableId("");
   }
 
@@ -62,6 +64,7 @@ function TaskForm({ initialTask, onSubmit, onCancel, fixedDeliverableId }: TaskF
       deliverableId: deliverableId || undefined,
       dueAt: dueDate ? endOfDay(fromIsoDateLocal(dueDate)).toISOString() : undefined,
       estimateMinutes: estimate ? Number(estimate) : undefined,
+      notes: notes.trim() || undefined,
       scheduledFor: initialTask?.scheduledFor,
       completedAt: initialTask?.completedAt,
     });
@@ -153,7 +156,15 @@ function TaskForm({ initialTask, onSubmit, onCancel, fixedDeliverableId }: TaskF
               className="w-20"
             />
           </div>
-          <PillarPicker value={pillar} onChange={setPillar} label="Pillar for task" />
+          <PillarPicker value={pillar} onChange={setPillar} label="Pillar for task" allowClear />
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Notes or a resource link (optional)"
+            aria-label="Task notes"
+            rows={2}
+            className="w-full resize-none rounded-input border border-input bg-transparent px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
         </div>
       ) : null}
     </form>

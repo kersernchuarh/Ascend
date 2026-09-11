@@ -95,7 +95,9 @@ function DayColumn({ day, events, tasks, deliverables, sessions, now, prefs }: D
           ))}
           {scheduledTasks.map((task) => (
             <div key={task.id} className="flex flex-wrap items-center gap-1.5">
-              <PillBadge color={PILLARS[task.pillar].color}>{PILLARS[task.pillar].label}</PillBadge>
+              {task.pillar ? (
+                <PillBadge color={PILLARS[task.pillar].color}>{PILLARS[task.pillar].label}</PillBadge>
+              ) : null}
               <span
                 className={cn(
                   "text-caption",

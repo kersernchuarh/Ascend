@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, Pause, Play, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PillBadge } from "@/components/shared/pill-badge";
+import { LinkifiedText } from "@/components/shared/linkified-text";
 import { useTasks } from "@/state/task-context";
 import { useSessions } from "@/state/session-context";
 import { usePreferences } from "@/state/preferences-context";
@@ -94,9 +95,14 @@ function FocusSessionView() {
                 <>
                   <p className="text-caption text-muted-foreground">Focusing on</p>
                   <h2 className="text-h2 text-foreground">{selectedTask.title}</h2>
-                  <PillBadge color={PILLARS[selectedTask.pillar].color}>
-                    {PILLARS[selectedTask.pillar].label}
-                  </PillBadge>
+                  {selectedTask.pillar ? (
+                    <PillBadge color={PILLARS[selectedTask.pillar].color}>
+                      {PILLARS[selectedTask.pillar].label}
+                    </PillBadge>
+                  ) : null}
+                  {selectedTask.notes ? (
+                    <LinkifiedText text={selectedTask.notes} className="max-w-[280px] text-caption text-muted-foreground" />
+                  ) : null}
                 </>
               ) : (
                 <h2 className="text-h2 text-foreground">Free focus session</h2>

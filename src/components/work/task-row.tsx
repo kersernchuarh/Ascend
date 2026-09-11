@@ -6,6 +6,7 @@ import { Pencil, Play, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { PillBadge } from "@/components/shared/pill-badge";
+import { LinkifiedText } from "@/components/shared/linkified-text";
 import { TaskForm, type TaskFormInput } from "@/components/work/task-form";
 import { cn } from "@/lib/utils";
 import { formatDuration, formatRelativeDay } from "@/lib/format-date";
@@ -31,8 +32,8 @@ type WorkTaskRowProps = {
  *  deliberately doesn't share a component with (different action sets). */
 function WorkTaskRow({ task, deliverable, now, onToggle, onUpdate, onDelete }: WorkTaskRowProps) {
   const [editing, setEditing] = useState(false);
-  const pillar = PILLARS[task.pillar];
-  const Icon = pillar.icon;
+  const pillar = task.pillar ? PILLARS[task.pillar] : undefined;
+  const Icon = pillar?.icon;
   const dueAt = effectiveDueAt(task, deliverable);
   const isUrgent = dueAt ? deadlineRisk(dueAt, now) !== "on-track" : false;
 
@@ -71,10 +72,12 @@ function WorkTaskRow({ task, deliverable, now, onToggle, onUpdate, onDelete }: W
             {task.title}
           </span>
           <div className="flex flex-wrap items-center gap-2">
-            <PillBadge color={pillar.color}>
-              <Icon className="size-3" />
-              {pillar.label}
-            </PillBadge>
+            {pillar && Icon ? (
+              <PillBadge color={pillar.color}>
+                <Icon className="size-3" />
+                {pillar.label}
+              </PillBadge>
+            ) : null}
             {task.estimateMinutes ? (
               <span className="text-caption text-muted-foreground">~{formatDuration(task.estimateMinutes)}</span>
             ) : null}
@@ -86,6 +89,9 @@ function WorkTaskRow({ task, deliverable, now, onToggle, onUpdate, onDelete }: W
               )
             ) : null}
           </div>
+          {task.notes ? (
+            <LinkifiedText text={task.notes} className="text-caption text-muted-foreground" />
+          ) : null}
         </div>
       </label>
       <div className="flex shrink-0 items-center gap-0.5">
