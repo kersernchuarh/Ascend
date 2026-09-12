@@ -61,11 +61,19 @@ export type Task = {
    *  `dueAt`, and nothing in this codebase should ever derive one from the
    *  other. */
   scheduledFor?: string;
-  /** Planned effort in minutes, for future estimate-vs-actual comparison
-   *  (blueprint §10) once sessions exist. Also the field a user updates to
+  /** Remaining planned effort in minutes — the field a user updates to
    *  record "how much is actually left" after stopping a Focus Session
-   *  before finishing. */
+   *  before finishing. Distinct from `originalEstimateMinutes`: this one is
+   *  meant to be edited down over a task's life (blueprint §31's Focus
+   *  redesign); that one never is. */
   estimateMinutes?: number;
+  /** The first real duration guess ever given to this task, frozen the
+   *  moment `estimateMinutes` is first set (`state/task-context.ts`'s
+   *  `addTask`/`updateTask`) and never touched again after that — so
+   *  editing "remaining work" down as a task progresses can never quietly
+   *  destroy "how long I originally thought this would take". Absent
+   *  exactly when `estimateMinutes` has never been set at all. */
+  originalEstimateMinutes?: number;
   /** A task's own due date/time — for a standalone dated task with no
    *  `Deliverable` ("renew library card by Friday"). When the task *is*
    *  linked to a `deliverableId`, callers should prefer the deliverable's
@@ -212,6 +220,11 @@ export type StudySession = {
   plannedEnd: string;
   actualStart: string;
   actualEnd: string;
+  /** What the user said they'd focus on this session ("Finish questions
+   *  1-5") — optional, set once at start and never edited, distinct from
+   *  `Task.notes` (durable, task-level) since an intention only ever makes
+   *  sense in the context of the one session it was written for. */
+  intention?: string;
   /**
    * Whether the countdown was actually observed reaching zero, or the user
    * stopped it first. Deliberately stored rather than derived by comparing

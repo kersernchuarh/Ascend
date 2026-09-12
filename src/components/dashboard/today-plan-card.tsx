@@ -47,7 +47,7 @@ function TodayPlanCard() {
   const { sessions } = useSessions();
   const { events } = useCalendarEvents();
   const { preferences } = usePreferences();
-  const { session } = useActiveSession();
+  const { session, secondsLeft: activeSecondsLeft } = useActiveSession();
   const now = useNow();
   const [lastAction, setLastAction] = useState<UndoableAction | null>(null);
 
@@ -98,7 +98,7 @@ function TodayPlanCard() {
     <Card className="w-full" emphasis>
       <CardContent>
         {session ? (
-          <ActiveSessionBanner taskTitle={activeTask?.title} secondsLeft={session.secondsLeft} isRunning={session.isRunning} />
+          <ActiveSessionBanner taskTitle={activeTask?.title} secondsLeft={activeSecondsLeft} isRunning={session.isRunning} />
         ) : nextTask ? (
           <Link
             href={`/focus?task=${nextTask.id}`}

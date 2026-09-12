@@ -135,7 +135,18 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const updateTask = useCallback((id: string, changes: TaskChanges) => {
     setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, ...changes } : task))
+      prev.map((task) => {
+        if (task.id !== id) return task;
+        const next = { ...task, ...changes };
+        // The first time a task ever gets a real estimate, freeze it as the
+        // "original" too — see `Task.originalEstimateMinutes`'s docs. Every
+        // change after that only ever touches `estimateMinutes` (remaining
+        // work), never this.
+        if (next.originalEstimateMinutes == null && next.estimateMinutes != null) {
+          next.originalEstimateMinutes = next.estimateMinutes;
+        }
+        return next;
+      })
     );
   }, []);
 
@@ -144,6 +155,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       ...input,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
+      originalEstimateMinutes: input.originalEstimateMinutes ?? input.estimateMinutes,
     };
     setTasks((prev) => [...prev, task]);
   }, []);

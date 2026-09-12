@@ -1086,6 +1086,35 @@ Real usage feedback after the quick-capture milestone (§29): the app "feels bet
 
 ---
 
+## 31. Focus workspace redesign (phase 2 of "make it feel worth using")
+
+**The core technical fix:** the timer previously decremented a stored `secondsLeft` once per `setInterval` tick — the exact anti-pattern that drifts under a throttled/backgrounded tab, since a skipped tick is silently lost time rather than a late-but-still-correct read. Replaced with `domain/focus-timer.ts` (pure, fully unit-tested, 9 cases): every displayed value is recomputed from `actualStart`/`pausedAt`/`totalPausedMs` against a real `now: Date` every time, so a tick firing late still produces the right number — it's just late to *show*, never wrong. The `setInterval` that remains exists only to trigger a re-render once a second; it carries no state of its own.
+
+**Persistence across reload, safely:** the active session (`persistence/active-session.ts`) is now a raw-storage-peek singleton, the same pattern `persistence/onboarding.ts` established — timestamps only, recomputed on read exactly like a live tick would. This is what makes a hard refresh, not just in-app navigation, resume correctly. A genuine race was caught building this: an already-expired session detected immediately on rehydration could call `recordSession` in the same tick `SessionProvider` was still loading its own persisted sessions from storage, and that load completing a moment later would silently overwrite the just-recorded one. Fixed by gating the rehydrate-and-finalize path on `SessionProvider`'s own `status === "ready"` — caught and fixed via a deliberate racing test (an already-expired session injected directly into storage, then a fresh navigation to `/focus`), not just code review.
+
+**Duplicate-logging prevention:** an in-memory `recordedRef` guard (per mount) plus synchronously clearing the persisted session the instant `finalize` runs (not waiting for the write-through effect) close the window where a reload could find and re-record an already-finalized session. Verified: exactly one `StudySession` recorded per real session end, across pause/resume/extend/reload/re-navigate sequences. **Disclosed, not solved:** two browser tabs open to the same session simultaneously could each independently finalize it — no cross-tab lock exists anywhere in this app's architecture, and adding one is out of scope for this phase.
+
+**Original estimate vs. remaining work vs. actual time — now three distinct, correctly-scoped things:**
+- `Task.originalEstimateMinutes` (new) — frozen the first time a task ever gets a real estimate (`state/task-context.ts`'s `addTask`/`updateTask`), never touched again.
+- `Task.estimateMinutes` — unchanged in meaning ("remaining work"), still what the Focus completion screen's "Continue later" edits, still what `domain/progress.workloadByPillar` reads as outstanding effort.
+- Actual focused time — unchanged, always derived live from `StudySession` records, never stored as a rollup.
+
+Purely additive; no migration. `domain/progress.estimateAccuracy` (Deliverable-level) was already unaffected by any of this — verified by reading it, not assumed — since it only ever reads `Deliverable.estimateMinutes`, a completely separate field from anything Task-level.
+
+**Design, per the brief:**
+- Compact session-length chips (15/25/45/60m), a session-scoped override that never touches the `UserPreferences` default.
+- Optional session intention, shown as an italic quote while running and stored on the `StudySession` record (`intention?: string`) for real historical context — distinct from `Task.notes`, which is durable and task-level, not session-scoped.
+- Notes/resource links moved behind a closed-by-default "Notes" disclosure — present but never competing with the timer.
+- `+5 min` extend and a clear square "Finish" control, both available while running or paused; neither auto-completes the task — that's now an explicit, separate choice.
+- Completion screen offers **Complete task** / **Continue later** (reveals an inline, optional remaining-minutes field, prefilled with the current value so leaving it untouched is a no-op) / **Take a break** — no reflection form, ever. Free-focus sessions (no task) collapse to a single "Done".
+- Mobile: smaller circle (`size-48` vs `size-64`), tightened vertical spacing throughout — verified the timer and primary controls render without scrolling at 375×812, including the "fresh" pre-start state with every optional control visible (the tallest state).
+
+**A real bug caught by testing, not assumed away:** the first implementation resolved the completion screen's task from live component state (`selectedTaskId`), which is empty whenever a session is discovered already-complete on a fresh navigation with no `?task=` in the URL (exactly the rehydration path this phase added) — the completion screen would silently fall back to "no task" and lose the Complete/Continue-later/Take-a-break choices entirely. Fixed by resolving the task from the *recorded* `StudySession.taskId` instead, which is always correct regardless of what URL or component state got it there.
+
+**Not touched by this phase:** Habits and the two-month calendar (next), the residual orange color collision, and any AI capability.
+
+---
+
 ## BIGGEST CHANGES I WOULD MAKE
 
 The ten highest-impact changes, ordered by impact.

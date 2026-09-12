@@ -12,14 +12,18 @@ import {
 } from "react";
 import { useSessions } from "@/state/session-context";
 import { isMeaningfulSessionDuration } from "@/domain/metrics";
+import { elapsedSeconds, isSessionComplete, secondsLeft as computeSecondsLeft } from "@/domain/focus-timer";
+import { getPersistedActiveSession, setPersistedActiveSession } from "@/persistence/active-session";
 import type { StudySession } from "@/domain/types";
 
 export type ActiveSession = {
   taskId?: string;
+  intention?: string;
   sessionLengthSeconds: number;
-  secondsLeft: number;
-  isRunning: boolean;
   actualStart: string;
+  isRunning: boolean;
+  pausedAt?: string;
+  totalPausedMs: number;
 };
 
 type ActiveSessionContextValue = {
@@ -27,15 +31,25 @@ type ActiveSessionContextValue = {
    *  source of truth Home reads to decide whether to show the active
    *  session prominently or the ordinary "start focus" prompt. */
   session: ActiveSession | null;
+  /** Live, timestamp-derived countdown — recomputed from `session`'s own
+   *  timestamps against a real clock every tick (`domain/focus-timer.ts`),
+   *  never accumulated by decrementing once per tick. `0` when there's no
+   *  session, so consumers don't each need a null check just to display it. */
+  secondsLeft: number;
   /** Set the instant a session ends (completed or abandoned), so `/focus`
    *  can show its confirmation screen even though `session` above has
    *  already gone back to `null`. Cleared by `resetToFresh`. */
   completedSession: StudySession | null;
-  startSession: (taskId: string | undefined, sessionLengthSeconds: number) => void;
+  startSession: (taskId: string | undefined, sessionLengthSeconds: number, intention?: string) => void;
   toggleRunning: () => void;
+  /** Adds whole minutes to the session's target length — available while
+   *  running or paused, independent of finishing/completing the task. */
+  extendSession: (minutes: number) => void;
   /** Ends the running session now, recording it only if real time was
    *  actually spent (`isMeaningfulSessionDuration`) — mirrors the exact
-   *  abandon-vs-discard rule `/focus` always used. */
+   *  abandon-vs-discard rule `/focus` always used. Never touches the linked
+   *  task; what happens to the task is a separate, explicit choice made on
+   *  the completion screen. */
   endSession: () => void;
   resetToFresh: () => void;
 };
@@ -44,101 +58,184 @@ const ActiveSessionContext = createContext<ActiveSessionContextValue | null>(nul
 
 /**
  * Lifted out of `/focus`'s local component state so a running session
- * survives navigating to Home (previously: leaving `/focus` silently killed
- * the timer with nothing recorded) and so Home can honestly detect and
- * surface it — the one small architecture change the Home v2 redesign
- * needed (PRODUCT_BLUEPRINT.md §9.2's "session running" state). Deliberately
- * NOT persisted to `localStorage`: a session mid-countdown is still, by this
- * product's own established framing (`domain/types.StudySession`'s docs),
- * ordinary ephemeral state — surviving in-app navigation is the real gap
- * this fixes; surviving a hard reload would need wall-clock-derived resume
- * logic that's a materially bigger feature this phase didn't call for, and
- * is disclosed rather than silently unhandled.
+ * survives navigating to Home, and (as of the Focus redesign,
+ * PRODUCT_BLUEPRINT.md §31) survives a hard reload too — the session is
+ * persisted (`persistence/active-session.ts`) as pure timestamps, and every
+ * displayed value is recomputed from those timestamps against a real clock
+ * rather than resumed from a stored countdown. That's what makes a
+ * backgrounded/throttled tab, or the tab being closed and reopened, never
+ * produce a wrong number: whenever this next actually renders, it asks
+ * "what time is it really" and does the arithmetic fresh.
  *
  * Must be nested inside `SessionProvider`: finishing a session calls
  * `recordSession` directly here, once, rather than in every place a session
- * can end (auto-completion on the ticking interval, or a manual end from
- * `/focus`) — exactly the "one source of truth" reasoning `StudySession`'s
- * own docs already apply to `outcome`.
+ * can end (auto-completion on a live tick, rehydrating an already-expired
+ * persisted session, or a manual end from `/focus`) — exactly the "one
+ * source of truth" reasoning `StudySession`'s own docs already apply to
+ * `outcome`.
  */
 export function ActiveSessionProvider({ children }: { children: ReactNode }) {
-  const { recordSession } = useSessions();
+  const { recordSession, status: sessionStoreStatus } = useSessions();
   const [session, setSession] = useState<ActiveSession | null>(null);
   const [completedSession, setCompletedSession] = useState<StudySession | null>(null);
+  // Forces a re-render once a second while a session is running so the
+  // timestamp-derived values below get recomputed against a fresh clock —
+  // the tick itself carries no information, it's purely a "look again" nudge.
+  const [tick, setTick] = useState(0);
   const recordedRef = useRef(false);
+  const hydratedRef = useRef(false);
+
+  // One-time hydration from storage — the resume path for both a genuine
+  // reload and (functionally the same code path) the very first render.
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const persisted = getPersistedActiveSession();
+    if (persisted) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSession(persisted);
+    }
+  }, []);
+
+  // Write-through: every real change to `session` (start/pause/resume/
+  // extend/finalize) is persisted immediately, so a reload a moment later
+  // always resumes from the latest truth, and a finalized (cleared) session
+  // can never be found and re-recorded.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    setPersistedActiveSession(
+      session
+        ? {
+            taskId: session.taskId,
+            intention: session.intention,
+            sessionLengthSeconds: session.sessionLengthSeconds,
+            actualStart: session.actualStart,
+            isRunning: session.isRunning,
+            pausedAt: session.pausedAt,
+            totalPausedMs: session.totalPausedMs,
+          }
+        : null
+    );
+  }, [session]);
 
   const finalize = useCallback(
-    (current: ActiveSession, outcome: "completed" | "abandoned") => {
+    (current: ActiveSession, outcome: "completed" | "abandoned", now: Date) => {
       if (recordedRef.current) return;
       recordedRef.current = true;
+      // A completed session's real end is the target instant itself (even
+      // if we only *detected* that after reopening the app later) — an
+      // abandoned one really did end at the moment the user chose to stop.
       const plannedEnd = new Date(
         new Date(current.actualStart).getTime() + current.sessionLengthSeconds * 1000
-      ).toISOString();
+      );
+      const actualEnd = outcome === "completed" ? plannedEnd : now;
       const recorded: StudySession = {
         id: crypto.randomUUID(),
         taskId: current.taskId,
+        intention: current.intention,
         plannedStart: current.actualStart,
-        plannedEnd,
+        plannedEnd: plannedEnd.toISOString(),
         actualStart: current.actualStart,
-        actualEnd: new Date().toISOString(),
+        actualEnd: actualEnd.toISOString(),
         outcome,
       };
       recordSession(recorded);
       setCompletedSession(recorded);
       setSession(null);
+      // Belt-and-suspenders against the write-through effect's timing: clear
+      // storage synchronously, right here, so there is no window at all in
+      // which a reload could find a not-yet-cleared, already-recorded
+      // session and log it a second time.
+      setPersistedActiveSession(null);
     },
     [recordSession]
   );
 
-  // The single ticking clock for the active session, alive for as long as
-  // the app shell is mounted — not tied to `/focus` being the current
-  // route, which is exactly what lets Home show a live, correct countdown.
+  // Live ticking clock, alive only while a session is actually running —
+  // not tied to `/focus` being the current route, which is what lets Home
+  // show a correct, live countdown too.
   useEffect(() => {
     if (!session?.isRunning) return;
-    const interval = setInterval(() => {
-      setSession((prev) => {
-        if (!prev) return prev;
-        if (prev.secondsLeft <= 1) return { ...prev, secondsLeft: 0, isRunning: false };
-        return { ...prev, secondsLeft: prev.secondsLeft - 1 };
-      });
-    }, 1000);
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, [session?.isRunning]);
 
-  // Reaching zero always means "completed" — never reachable via the manual
-  // end path below, which always has `secondsLeft > 0` (a session that hits
-  // zero already isRunning:false from the tick above, so this only fires
-  // once, the instant it happens).
+  // Detects a countdown that has genuinely reached zero by real elapsed
+  // time — whether that's a live tick, or the very first check right after
+  // rehydrating a session whose target time already passed while the app
+  // was closed. Both paths are the same condition, checked the same way.
+  //
+  // Gated on `SessionProvider`'s own hydration (`sessionStoreStatus`), not
+  // just this provider's: the rehydrate-and-immediately-finalize path can
+  // otherwise run in the very same tick `SessionProvider` is still loading
+  // its own persisted sessions, and `recordSession`'s write would be
+  // silently clobbered a moment later when that load completes and
+  // overwrites `sessions` state — a real race, not a hypothetical one,
+  // caught live: rehydrating an already-expired session immediately on a
+  // fresh mount reliably lost the just-recorded session before this guard
+  // existed. Re-checks the instant the store becomes ready (via the
+  // dependency below), so nothing is missed, only delayed by however long
+  // hydration itself takes (microtasks, not something a user perceives).
   useEffect(() => {
-    if (session && session.secondsLeft === 0 && !recordedRef.current) {
-      finalize(session, "completed");
+    if (!session?.isRunning || sessionStoreStatus !== "ready") return;
+    const now = new Date();
+    if (isSessionComplete(session, now) && !recordedRef.current) {
+      finalize(session, "completed", now);
     }
-  }, [session, finalize]);
+    // `tick` is intentionally a dependency purely to re-run this check every
+    // second; its value is never read.
+  }, [session, finalize, tick, sessionStoreStatus]);
 
-  const startSession = useCallback((taskId: string | undefined, sessionLengthSeconds: number) => {
-    recordedRef.current = false;
-    setCompletedSession(null);
-    setSession({
-      taskId,
-      sessionLengthSeconds,
-      secondsLeft: sessionLengthSeconds,
-      isRunning: true,
-      actualStart: new Date().toISOString(),
+  const startSession = useCallback(
+    (taskId: string | undefined, sessionLengthSeconds: number, intention?: string) => {
+      recordedRef.current = false;
+      setCompletedSession(null);
+      setSession({
+        taskId,
+        intention: intention?.trim() || undefined,
+        sessionLengthSeconds,
+        actualStart: new Date().toISOString(),
+        isRunning: true,
+        totalPausedMs: 0,
+      });
+    },
+    []
+  );
+
+  const toggleRunning = useCallback(() => {
+    setSession((prev) => {
+      if (!prev) return prev;
+      const now = new Date();
+      if (prev.isRunning) {
+        // Pausing: freeze progress starting now.
+        return { ...prev, isRunning: false, pausedAt: now.toISOString() };
+      }
+      // Resuming: fold the just-finished pause into the running total.
+      const pauseMs = prev.pausedAt ? Math.max(0, now.getTime() - new Date(prev.pausedAt).getTime()) : 0;
+      return {
+        ...prev,
+        isRunning: true,
+        pausedAt: undefined,
+        totalPausedMs: prev.totalPausedMs + pauseMs,
+      };
     });
   }, []);
 
-  const toggleRunning = useCallback(() => {
-    setSession((prev) => (prev ? { ...prev, isRunning: !prev.isRunning } : prev));
+  const extendSession = useCallback((minutes: number) => {
+    setSession((prev) => (prev ? { ...prev, sessionLengthSeconds: prev.sessionLengthSeconds + minutes * 60 } : prev));
   }, []);
 
   const endSession = useCallback(() => {
     setSession((current) => {
       if (!current) return current;
-      const elapsedSeconds = current.sessionLengthSeconds - current.secondsLeft;
-      if (isMeaningfulSessionDuration(elapsedSeconds)) {
-        finalize(current, "abandoned");
+      const now = new Date();
+      const elapsed = elapsedSeconds(current, now);
+      if (isMeaningfulSessionDuration(elapsed)) {
+        finalize(current, "abandoned", now);
         return null;
       }
+      recordedRef.current = false;
+      setPersistedActiveSession(null);
       return null;
     });
   }, [finalize]);
@@ -149,9 +246,26 @@ export function ActiveSessionProvider({ children }: { children: ReactNode }) {
     setCompletedSession(null);
   }, []);
 
+  const liveSecondsLeft = useMemo(() => {
+    if (!session) return 0;
+    // `tick` deliberately included so this recomputes every second while
+    // running; the computation itself only ever depends on real time.
+    void tick;
+    return computeSecondsLeft(session, new Date());
+  }, [session, tick]);
+
   const value = useMemo<ActiveSessionContextValue>(
-    () => ({ session, completedSession, startSession, toggleRunning, endSession, resetToFresh }),
-    [session, completedSession, startSession, toggleRunning, endSession, resetToFresh]
+    () => ({
+      session,
+      secondsLeft: liveSecondsLeft,
+      completedSession,
+      startSession,
+      toggleRunning,
+      extendSession,
+      endSession,
+      resetToFresh,
+    }),
+    [session, liveSecondsLeft, completedSession, startSession, toggleRunning, extendSession, endSession, resetToFresh]
   );
 
   return <ActiveSessionContext.Provider value={value}>{children}</ActiveSessionContext.Provider>;
