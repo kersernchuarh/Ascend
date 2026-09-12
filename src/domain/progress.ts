@@ -79,7 +79,10 @@ export function workloadByPillar(tasks: Task[], deliverables: Deliverable[]): Pi
     totals.set(pillar, (totals.get(pillar) ?? 0) + minutes);
   };
   for (const task of tasks) {
-    if (task.completedAt == null) add(task.pillar, task.estimateMinutes);
+    // A quick-captured task may have no pillar yet — it contributes nothing
+    // to this breakdown rather than being guessed into one (no fabricated
+    // bucket), same principle as the missing-estimate case above.
+    if (task.completedAt == null && task.pillar) add(task.pillar, task.estimateMinutes);
   }
   for (const deliverable of deliverables) {
     if (deliverable.completedAt == null) add(deliverable.pillar, deliverable.estimateMinutes);

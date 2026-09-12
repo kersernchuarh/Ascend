@@ -75,7 +75,7 @@ export function createSeedTasks(now: Date): Task[] {
       // the "no estimate" state a real user's own tasks will regularly hit.
       id: "t5",
       title: "Call mom",
-      pillar: "life",
+      pillar: "relationships",
       createdAt: atDaysFromNow(now, -1, 18, 0),
       scheduledFor: atToday(now, 20, 0),
     },
@@ -94,7 +94,7 @@ export function createSeedTasks(now: Date): Task[] {
     {
       id: "t7",
       title: "Reply to club email",
-      pillar: "life",
+      pillar: "growth",
       createdAt: atDaysFromNow(now, -2, 12, 0),
       scheduledFor: atDaysFromNow(now, -1, 18, 0),
     },
@@ -156,7 +156,7 @@ export function createSeedDeliverables(now: Date): Deliverable[] {
       // than only ever appearing once a user creates one by hand.
       id: "d3",
       title: "Club meeting prep",
-      pillar: "productivity",
+      pillar: "growth",
       dueAt: dueInDays(5),
       allDay: true,
       createdAt: atDaysFromNow(now, -2, 9, 0),

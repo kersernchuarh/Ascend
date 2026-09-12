@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createSeedDeliverables } from "@/data/dashboard";
+import { getOnboardingChoice } from "@/persistence/onboarding";
 import { useNow } from "@/domain/use-now";
 import { createRepository } from "@/persistence/repository";
 import type { Deliverable } from "@/domain/types";
@@ -52,12 +53,15 @@ export function DeliverableProvider({ children }: { children: ReactNode }) {
         hydratedRef.current = true;
         setDeliverables(persisted);
         setStatus("ready");
-      } else if (now) {
+      } else if (now && getOnboardingChoice() === "sample") {
         const seeded = createSeedDeliverables(now);
         hydratedRef.current = true;
         setDeliverables(seeded);
         setStatus("ready");
         void deliverableRepository.replaceAll(seeded);
+      } else if (now) {
+        hydratedRef.current = true;
+        setStatus("ready");
       }
     })();
     return () => {

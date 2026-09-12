@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, ListPlus, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CalendarClock, ListPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { PillBadge } from "@/components/shared/pill-badge";
@@ -70,9 +70,16 @@ function AttentionCard() {
   }, [deliverables, tasks, sessions, events, preferences, now]);
 
   const conflictToday = ready && now ? dayHasConflict(now, events, tasks) : false;
+  // Nothing to say and nothing to show — the whole card recedes rather than
+  // taking up a screen's worth of space to announce "all clear" (this
+  // phase's product direction: an empty-but-fine state shouldn't compete
+  // with the sections that actually have something to say).
+  const nothingToReport = ready && flagged.length === 0 && !conflictToday;
+
+  if (nothingToReport) return null;
 
   return (
-    <Card id="attention" className="w-full scroll-mt-20">
+    <Card id="attention" className="w-full scroll-mt-20" flat>
       <CardContent>
         <SectionHeader title="Attention" description="Where the numbers don't add up" />
         {!ready || !now ? (
@@ -91,25 +98,18 @@ function AttentionCard() {
                 Your schedule overlaps today
               </Link>
             ) : null}
-            {flagged.length === 0 && !conflictToday ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-                <ShieldCheck className="size-6 text-muted-foreground" strokeWidth={1.5} />
-                <p className="text-body text-muted-foreground">Nothing needs attention right now</p>
-              </div>
-            ) : (
-              flagged.map((deliverable) => (
-                <AttentionRow
-                  key={deliverable.id}
-                  deliverable={deliverable}
-                  tasks={tasks}
-                  sessions={sessions}
-                  events={events}
-                  now={now}
-                  prefs={preferences}
-                  onAddToToday={(taskId) => updateTask(taskId, { scheduledFor: now.toISOString() })}
-                />
-              ))
-            )}
+            {flagged.map((deliverable) => (
+              <AttentionRow
+                key={deliverable.id}
+                deliverable={deliverable}
+                tasks={tasks}
+                sessions={sessions}
+                events={events}
+                now={now}
+                prefs={preferences}
+                onAddToToday={(taskId) => updateTask(taskId, { scheduledFor: now.toISOString() })}
+              />
+            ))}
           </div>
         )}
       </CardContent>

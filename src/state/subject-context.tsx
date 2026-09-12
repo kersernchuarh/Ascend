@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createSeedSubjects } from "@/data/dashboard";
+import { getOnboardingChoice } from "@/persistence/onboarding";
 import { useNow } from "@/domain/use-now";
 import { createRepository } from "@/persistence/repository";
 import type { Subject } from "@/domain/types";
@@ -49,12 +50,15 @@ export function SubjectProvider({ children }: { children: ReactNode }) {
         hydratedRef.current = true;
         setSubjects(persisted);
         setStatus("ready");
-      } else if (now) {
+      } else if (now && getOnboardingChoice() === "sample") {
         const seeded = createSeedSubjects(now);
         hydratedRef.current = true;
         setSubjects(seeded);
         setStatus("ready");
         void subjectRepository.replaceAll(seeded);
+      } else if (now) {
+        hydratedRef.current = true;
+        setStatus("ready");
       }
     })();
     return () => {

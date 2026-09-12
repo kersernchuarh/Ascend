@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +14,7 @@ import { useSessions } from "@/state/session-context";
 import { useCalendarEvents } from "@/state/calendar-event-context";
 import { usePreferences } from "@/state/preferences-context";
 import { useNow } from "@/domain/use-now";
+import { isSameDay } from "@/domain/time";
 import { atRiskDeliverables, weekDays } from "@/domain/plan";
 
 /**
@@ -45,9 +46,16 @@ export default function PlanPage() {
     [deliverables, tasks, sessions, events, preferences, now]
   );
 
+  // `null` means "no explicit pick yet" — defaults to today, computed fresh
+  // each render rather than baked into the initial state, since `now` isn't
+  // known on the very first render (`useNow`'s SSR-safe null-until-mounted
+  // pattern).
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const effectiveSelectedDay = selectedDay ?? now ?? null;
+
   return (
     <div className="flex flex-col gap-6">
-      <Card>
+      <Card emphasis>
         <CardContent className="flex flex-col gap-4">
           <SectionHeader
             level={2}
@@ -72,6 +80,8 @@ export default function PlanPage() {
                   sessions={sessions}
                   now={now}
                   prefs={preferences}
+                  isSelected={!!effectiveSelectedDay && isSameDay(day, effectiveSelectedDay)}
+                  onSelect={() => setSelectedDay(day)}
                 />
               ))}
             </div>
@@ -79,14 +89,25 @@ export default function PlanPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="fixed-schedule" className="scroll-mt-20" flat>
         <CardContent className="flex flex-col gap-4">
-          <SectionHeader title="Your fixed schedule" description="Classes, CCAs, and appointments that repeat every week" />
+          <SectionHeader
+            title="Your fixed schedule"
+            description={
+              effectiveSelectedDay
+                ? `Adding for ${new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(effectiveSelectedDay)} — classes, CCAs, and appointments that repeat every week`
+                : "Classes, CCAs, and appointments that repeat every week"
+            }
+          />
           {!ready ? (
             <Skeleton className="h-16 w-full rounded-[10px]" aria-hidden="true" />
           ) : (
             <>
-              <EventForm onSubmit={(input) => addEvent(input)} />
+              <EventForm
+                key={effectiveSelectedDay?.getDay() ?? "none"}
+                initialDayOfWeek={effectiveSelectedDay?.getDay()}
+                onSubmit={(input) => addEvent(input)}
+              />
               <ScheduleList
                 events={events}
                 onUpdate={(id, input) => updateEvent(id, input)}
@@ -97,26 +118,28 @@ export default function PlanPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="flex flex-col gap-4">
-          <SectionHeader title="At risk" description="Deadlines where the numbers don't add up" />
-          {!ready ? (
-            <div className="flex flex-col gap-3" aria-hidden="true">
-              <Skeleton className="h-16 w-full rounded-[10px]" />
-              <Skeleton className="h-16 w-full rounded-[10px]" />
-            </div>
-          ) : (
-            <AtRiskList
-              deliverables={atRisk}
-              tasks={tasks}
-              sessions={sessions}
-              events={events}
-              now={now ?? new Date()}
-              prefs={preferences}
-            />
-          )}
-        </CardContent>
-      </Card>
+      {!ready || atRisk.length > 0 ? (
+        <Card flat>
+          <CardContent className="flex flex-col gap-4">
+            <SectionHeader title="At risk" description="Deadlines where the numbers don't add up" />
+            {!ready ? (
+              <div className="flex flex-col gap-3" aria-hidden="true">
+                <Skeleton className="h-16 w-full rounded-[10px]" />
+                <Skeleton className="h-16 w-full rounded-[10px]" />
+              </div>
+            ) : (
+              <AtRiskList
+                deliverables={atRisk}
+                tasks={tasks}
+                sessions={sessions}
+                events={events}
+                now={now ?? new Date()}
+                prefs={preferences}
+              />
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

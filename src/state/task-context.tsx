@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createSeedTasks } from "@/data/dashboard";
+import { getOnboardingChoice } from "@/persistence/onboarding";
 import { useNow } from "@/domain/use-now";
 import { isDueToday } from "@/domain/time";
 import { createRepository } from "@/persistence/repository";
@@ -87,15 +88,20 @@ export function TaskProvider({ children }: { children: ReactNode }) {
         hydratedRef.current = true;
         setTasks(persisted);
         setStatus("ready");
-      } else if (now) {
-        // Genuinely first-ever run: nothing persisted yet. Seed once, then
-        // persist that seed immediately — it becomes real, editable state
-        // from this point forward, not a value regenerated every load.
+      } else if (now && getOnboardingChoice() === "sample") {
+        // First-ever run, and the user explicitly chose to explore sample
+        // data on the welcome screen (never assumed or silent — §28 gap #4).
         const seeded = createSeedTasks(now);
         hydratedRef.current = true;
         setTasks(seeded);
         setStatus("ready");
         void taskRepository.replaceAll(seeded);
+      } else if (now) {
+        // First-ever run, "start fresh" chosen (or no choice recorded yet,
+        // which the app-shell-level onboarding gate prevents this provider
+        // from even mounting until resolved): genuinely empty, not seeded.
+        hydratedRef.current = true;
+        setStatus("ready");
       }
       // else: nothing persisted and `now` isn't resolved yet — wait for the
       // next run of this effect, triggered when `useNow()` settles.
@@ -129,7 +135,18 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const updateTask = useCallback((id: string, changes: TaskChanges) => {
     setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, ...changes } : task))
+      prev.map((task) => {
+        if (task.id !== id) return task;
+        const next = { ...task, ...changes };
+        // The first time a task ever gets a real estimate, freeze it as the
+        // "original" too — see `Task.originalEstimateMinutes`'s docs. Every
+        // change after that only ever touches `estimateMinutes` (remaining
+        // work), never this.
+        if (next.originalEstimateMinutes == null && next.estimateMinutes != null) {
+          next.originalEstimateMinutes = next.estimateMinutes;
+        }
+        return next;
+      })
     );
   }, []);
 
@@ -138,6 +155,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       ...input,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
+      originalEstimateMinutes: input.originalEstimateMinutes ?? input.estimateMinutes,
     };
     setTasks((prev) => [...prev, task]);
   }, []);

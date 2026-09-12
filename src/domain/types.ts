@@ -19,8 +19,6 @@ import type { HabitIconKey } from "@/lib/habit-icons";
  *
  * Fields considered and deliberately excluded, to avoid inventing schema no
  * screen reads yet (PRODUCT_BLUEPRINT.md §6.2, §10):
- * - `description` — nothing renders or edits one today; `Deliverable` gets
- *   one instead, where assignment notes actually have somewhere to live.
  * - `priority` — nothing sets or reads it; due-date proximity already drives
  *   the only prioritisation signal that exists (`deadlineRisk`).
  * - `subjectId` — a task reaches a `Subject` only via its `Deliverable`.
@@ -30,11 +28,23 @@ import type { HabitIconKey } from "@/lib/habit-icons";
  *
  * `status` is deliberately not a separate field: it is fully determined by
  * whether `completedAt` is set, and keeping both would let them disagree.
+ *
+ * `pillar` and `notes` were widened/added for the "quick capture" milestone
+ * (PRODUCT_BLUEPRINT.md §29): a task jotted down in five seconds shouldn't
+ * force a pillar choice it doesn't have yet. Both are purely additive to
+ * the stored shape — every task written before this change already has a
+ * real `pillar` and simply has no `notes`, which the optional type already
+ * represents correctly, so no data migration or repository version bump is
+ * needed. Anywhere a screen reads `task.pillar`, it must treat `undefined`
+ * as a real, displayable state ("no pillar assigned") rather than crash or
+ * fall back to a fabricated default.
  */
 export type Task = {
   id: string;
   title: string;
-  pillar: PillarId;
+  /** Optional: a quick-captured task may have no pillar yet. Never defaulted
+   *  to a guessed value — see the type-level doc comment above. */
+  pillar?: PillarId;
   /** When the task was created. */
   createdAt: string;
   /** ISO datetime the task was marked done; absent means still outstanding.
@@ -43,11 +53,27 @@ export type Task = {
   completedAt?: string;
   /** ISO datetime the user plans to do this — not a hard deadline, just a
    *  planned moment (e.g. "call mom at 8pm"). Optional: a task may have no
-   *  specific time and simply live in a backlog. */
+   *  specific time and simply live in a backlog.
+   *
+   *  Deliberately independent of `dueAt`: this is *when the user intends to
+   *  work on it*, `dueAt` is *when it's actually due*. Clearing this (a
+   *  "defer" — see `state/task-context.removeFromToday`) must never touch
+   *  `dueAt`, and nothing in this codebase should ever derive one from the
+   *  other. */
   scheduledFor?: string;
-  /** Planned effort in minutes, for future estimate-vs-actual comparison
-   *  (blueprint §10) once sessions exist. */
+  /** Remaining planned effort in minutes — the field a user updates to
+   *  record "how much is actually left" after stopping a Focus Session
+   *  before finishing. Distinct from `originalEstimateMinutes`: this one is
+   *  meant to be edited down over a task's life (blueprint §31's Focus
+   *  redesign); that one never is. */
   estimateMinutes?: number;
+  /** The first real duration guess ever given to this task, frozen the
+   *  moment `estimateMinutes` is first set (`state/task-context.ts`'s
+   *  `addTask`/`updateTask`) and never touched again after that — so
+   *  editing "remaining work" down as a task progresses can never quietly
+   *  destroy "how long I originally thought this would take". Absent
+   *  exactly when `estimateMinutes` has never been set at all. */
+  originalEstimateMinutes?: number;
   /** A task's own due date/time — for a standalone dated task with no
    *  `Deliverable` ("renew library card by Friday"). When the task *is*
    *  linked to a `deliverableId`, callers should prefer the deliverable's
@@ -56,6 +82,13 @@ export type Task = {
   dueAt?: string;
   /** Optional link to the `Deliverable` this task contributes toward. */
   deliverableId?: string;
+  /** Free-text notes — assignment instructions, a resource link, a reminder
+   *  of where things were left. Rendered with plain URLs auto-linked
+   *  (`components/shared/linkified-text.tsx`) rather than a separate `url`
+   *  field, since a task has at most one thing to say here and a second
+   *  field would just invite the two to disagree about which one is "the"
+   *  link. */
+  notes?: string;
 };
 
 /** An academic course or personal area of work — "Chemistry", "History",
@@ -149,6 +182,12 @@ export type UserPreferences = {
   quietHoursEnd?: number;
   /** Minutes — replaces the hardcoded `STUDY_SESSION_SECONDS`. */
   sessionLengthMinutes: number;
+  /** Set the instant the user picks "start fresh" or "explore the sample"
+   *  on first run; `undefined` is what actually gates the welcome screen
+   *  (`components/onboarding/welcome-screen.tsx`) — never backfilled or
+   *  assumed, since a missing value here is a real, meaningful "hasn't
+   *  decided yet", not an oversight to paper over with a default. */
+  onboardingCompletedAt?: string;
 };
 
 /**
@@ -181,6 +220,11 @@ export type StudySession = {
   plannedEnd: string;
   actualStart: string;
   actualEnd: string;
+  /** What the user said they'd focus on this session ("Finish questions
+   *  1-5") — optional, set once at start and never edited, distinct from
+   *  `Task.notes` (durable, task-level) since an intention only ever makes
+   *  sense in the context of the one session it was written for. */
+  intention?: string;
   /**
    * Whether the countdown was actually observed reaching zero, or the user
    * stopped it first. Deliberately stored rather than derived by comparing

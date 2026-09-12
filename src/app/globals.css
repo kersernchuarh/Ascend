@@ -49,8 +49,12 @@
   --color-orange: var(--ascend-orange);
   --color-red: var(--ascend-red);
 
-  /* Component radii — deliberately distinct per surface, not a single ratio */
-  --radius-card: 24px;
+  /* Component radii — deliberately distinct per surface, not a single ratio.
+     `--radius-card` was 24px; dialed back to 18px for the visual-design
+     pass (PRODUCT_BLUEPRINT.md §30) — still clearly soft/rounded, without
+     the "bubble" weight a 24px corner reads as once several cards stack on
+     one screen. */
+  --radius-card: 18px;
   --radius-input: 16px;
   --radius-button: 14px;
   --radius-sm: calc(var(--radius) * 0.6);

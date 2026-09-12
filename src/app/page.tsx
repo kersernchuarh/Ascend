@@ -10,31 +10,28 @@ export default function Home() {
   return (
     <>
       {/*
-        Home v2 hierarchy, top to bottom (PRODUCT_BLUEPRINT.md §9.2,
-        finally buildable now that CalendarEvent/Preferences are real):
-        (1) orientation — who/where/what day, one derived attention signal;
-        (2) Today's Plan — the centerpiece, active session or contextual
-        "start focus", then the real task list; (3) Schedule — how today
-        actually looks; (4) Attention — genuinely at-risk/overdue work,
-        each with a concrete reason; (5) Habits due today; (6) a very small
-        amount of recent progress, linking out rather than reproducing
-        Progress.
+        Home v2 hierarchy (PRODUCT_BLUEPRINT.md §32's layout refinement):
+        a main column carrying today's actual work — Today's Plan (the
+        centerpiece) plus Attention when there's genuinely something to
+        flag (it hides itself otherwise, so an "all clear" day doesn't cost
+        a section) — next to a narrower supporting column for how today
+        looks structurally (fixed Schedule, a compact Habits glance).
+        Progress stays a small, secondary strip at the very bottom, never
+        competing with the task list above it for attention.
       */}
       <div className="hidden flex-col gap-6 md:flex">
         <HomeHeader />
 
         <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
+          <div className="flex flex-col gap-6 xl:col-span-2">
             <TodayPlanCard />
+            <AttentionCard />
           </div>
           <div className="flex flex-col gap-6">
             <ScheduleCard />
+            <HabitTrackerCard />
           </div>
         </section>
-
-        <AttentionCard />
-
-        <HabitTrackerCard />
 
         <TodayProgressStrip />
       </div>

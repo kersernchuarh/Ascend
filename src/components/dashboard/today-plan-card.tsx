@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Pause, Play, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Pause, Play, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TaskRow } from "@/components/dashboard/task-row";
-import { AddTaskRow } from "@/components/dashboard/add-task-row";
+import { AddTaskRow, type QuickCaptureInput } from "@/components/dashboard/add-task-row";
 import { AddExistingTaskRow } from "@/components/dashboard/add-existing-task-row";
+import { UndoToast, type UndoableAction } from "@/components/shared/undo-toast";
+import { InfoHint } from "@/components/shared/info-hint";
 import { useTasks } from "@/state/task-context";
 import { useDeliverables } from "@/state/deliverable-context";
 import { useSessions } from "@/state/session-context";
@@ -19,7 +21,6 @@ import { useNow } from "@/domain/use-now";
 import { isDueToday } from "@/domain/time";
 import { freeMinutesForDay } from "@/domain/plan";
 import { formatDuration } from "@/lib/format-date";
-import type { PillarId } from "@/lib/pillars";
 
 /**
  * The centerpiece of Home — merges the old `NowPanel` (the "what do I do
@@ -47,8 +48,9 @@ function TodayPlanCard() {
   const { sessions } = useSessions();
   const { events } = useCalendarEvents();
   const { preferences } = usePreferences();
-  const { session } = useActiveSession();
+  const { session, secondsLeft: activeSecondsLeft } = useActiveSession();
   const now = useNow();
+  const [lastAction, setLastAction] = useState<UndoableAction | null>(null);
 
   const deliverableById = useMemo(
     () => new Map(deliverables.map((d) => [d.id, d])),
@@ -83,9 +85,9 @@ function TodayPlanCard() {
     return { text: "You have enough time for today's plan", tight: false };
   }, [tasks, allTasks, sessions, events, preferences, now, status]);
 
-  function handleAdd(title: string, pillar: PillarId) {
+  function handleAdd(input: QuickCaptureInput) {
     if (!now) return;
-    addTask({ title, pillar, scheduledFor: now.toISOString() });
+    addTask({ ...input, scheduledFor: now.toISOString() });
   }
 
   function handleScheduleExisting(id: string) {
@@ -94,10 +96,10 @@ function TodayPlanCard() {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full" emphasis>
       <CardContent>
         {session ? (
-          <ActiveSessionBanner taskTitle={activeTask?.title} secondsLeft={session.secondsLeft} isRunning={session.isRunning} />
+          <ActiveSessionBanner taskTitle={activeTask?.title} secondsLeft={activeSecondsLeft} isRunning={session.isRunning} />
         ) : nextTask ? (
           <Link
             href={`/focus?task=${nextTask.id}`}
@@ -124,10 +126,17 @@ function TodayPlanCard() {
           title="Today's Plan"
           description={status === "ready" ? `${completedCount}/${tasks.length} completed` : undefined}
         />
+        <p className="mt-1 flex items-center gap-1.5 text-caption text-muted-foreground">
+          Choose your tasks for today.
+          <InfoHint label="Why isn't this scheduled automatically?">
+            Ascend doesn&apos;t build a schedule for you yet — you choose what&apos;s on today, and it only warns
+            you if the total looks like more than you have time for.
+          </InfoHint>
+        </p>
         {fitMessage ? (
           <p
             className={
-              "mt-3 flex items-center gap-1.5 text-caption " +
+              "mt-2 flex items-center gap-1.5 text-caption " +
               (fitMessage.tight ? "text-orange" : "text-muted-foreground")
             }
           >
@@ -135,24 +144,23 @@ function TodayPlanCard() {
             {fitMessage.text}
           </p>
         ) : null}
+
+        {status === "ready" ? (
+          <div className="mt-4">
+            <AddTaskRow onAdd={handleAdd} />
+            <AddExistingTaskRow backlogTasks={backlogTasks} onSchedule={handleScheduleExisting} />
+          </div>
+        ) : null}
+
         {status === "loading" ? (
           <div className="mt-4 flex flex-col gap-3" aria-hidden="true">
             <Skeleton className="h-14 w-full rounded-[10px]" />
             <Skeleton className="h-14 w-full rounded-[10px]" />
-            <Skeleton className="h-14 w-full rounded-[10px]" />
           </div>
-        ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <ClipboardCheck className="size-6 text-muted-foreground" strokeWidth={1.5} />
-            <p className="text-body text-muted-foreground">Nothing on your plate today</p>
-          </div>
-        ) : allDone ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <ClipboardCheck className="size-6 text-primary" strokeWidth={1.5} />
-            <p className="text-caption text-muted-foreground">Add another task below if there&apos;s more to do.</p>
-          </div>
+        ) : tasks.length === 0 ? null : allDone ? (
+          <p className="mt-3 text-caption text-muted-foreground">Add another task above if there&apos;s more to do.</p>
         ) : (
-          <ul className="mt-4 md:max-h-[420px] md:overflow-y-auto">
+          <ul className="mt-2 md:max-h-[420px] md:overflow-y-auto">
             {tasks.map((task, index) => (
               <TaskRow
                 key={task.id}
@@ -161,21 +169,32 @@ function TodayPlanCard() {
                 now={now ?? new Date()}
                 isFirst={index === 0}
                 isLast={index === tasks.length - 1}
-                onToggle={() => toggleTask(task.id)}
+                onToggle={() => {
+                  const wasIncomplete = !task.completedAt;
+                  toggleTask(task.id);
+                  setLastAction(
+                    wasIncomplete
+                      ? { message: `Completed "${task.title}"`, undo: () => toggleTask(task.id) }
+                      : null
+                  );
+                }}
                 onMoveUp={() => moveTaskInToday(task.id, "up")}
                 onMoveDown={() => moveTaskInToday(task.id, "down")}
-                onRemove={() => removeFromToday(task.id)}
+                onRemove={() => {
+                  const previousScheduledFor = task.scheduledFor;
+                  removeFromToday(task.id);
+                  setLastAction({
+                    message: `Deferred "${task.title}" — its deadline is unchanged`,
+                    undo: () => updateTask(task.id, { scheduledFor: previousScheduledFor }),
+                  });
+                }}
+                onUpdate={(input) => updateTask(task.id, input)}
               />
             ))}
           </ul>
         )}
-        {status === "ready" ? (
-          <>
-            <AddTaskRow onAdd={handleAdd} />
-            <AddExistingTaskRow backlogTasks={backlogTasks} onSchedule={handleScheduleExisting} />
-          </>
-        ) : null}
       </CardContent>
+      {lastAction ? <UndoToast action={lastAction} onDismiss={() => setLastAction(null)} /> : null}
     </Card>
   );
 }
@@ -197,6 +216,7 @@ function ActiveSessionBanner({
 }) {
   const minutes = Math.floor(secondsLeft / 60).toString().padStart(2, "0");
   const seconds = (secondsLeft % 60).toString().padStart(2, "0");
+  const minutesRemaining = Math.ceil(secondsLeft / 60);
   return (
     <Link
       href="/focus"
@@ -209,8 +229,14 @@ function ActiveSessionBanner({
           {taskTitle ?? "Free focus session"}
         </span>
       </span>
-      <span className="shrink-0 text-body font-medium tabular-nums text-primary" aria-live="polite">
+      <span className="shrink-0 text-body font-medium tabular-nums text-primary" aria-hidden="true">
         {minutes}:{seconds}
+      </span>
+      {/* Coarse, minute-granularity announcement — not every second (§22
+          item 7); only actually changes (and is only actually announced)
+          once the whole-minute value crosses a boundary. */}
+      <span className="sr-only" aria-live="polite">
+        {minutesRemaining} minute{minutesRemaining === 1 ? "" : "s"} remaining
       </span>
     </Link>
   );

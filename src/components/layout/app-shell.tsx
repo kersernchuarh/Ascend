@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
 import { PreferencesProvider } from "@/state/preferences-context";
+import { OnboardingGate } from "@/components/onboarding/onboarding-gate";
 import { CalendarEventProvider } from "@/state/calendar-event-context";
 import { SubjectProvider } from "@/state/subject-context";
 import { DeliverableProvider } from "@/state/deliverable-context";
@@ -22,6 +23,12 @@ type AppShellProps = {
 // when the user moves between pages. Persistence (Phase 2) is what makes
 // that state survive a full reload too, not just navigation.
 //
+// `OnboardingGate` sits directly inside `PreferencesProvider` (it needs
+// `preferences.onboardingCompletedAt`) and wraps every entity provider below
+// it — until a first-run choice is made, none of `CalendarEvent`/`Subject`/
+// `Deliverable`/`Task`/`Habit` mount at all, so their seed-once hydration
+// effects simply never run prematurely (§28 gap #4's first-run phase).
+//
 // Provider nesting is 9 deep as of the Home v2 redesign (Sidebar →
 // Preferences → CalendarEvent → Subject → Deliverable → Task → Session →
 // ActiveSession → Habit) — past the "~4 levels" reconsideration threshold
@@ -33,31 +40,33 @@ function AppShell({ children }: AppShellProps) {
   return (
     <SidebarProvider>
       <PreferencesProvider>
-        <CalendarEventProvider>
-          <SubjectProvider>
-            <DeliverableProvider>
-              <TaskProvider>
-                <SessionProvider>
-                  <ActiveSessionProvider>
-                    <HabitProvider>
-                      <div className="flex min-h-screen w-full">
-                        <Sidebar />
-                        <div className="flex min-w-0 flex-1 flex-col">
-                          <Topbar />
-                          <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
-                            <div className="mx-auto w-full max-w-[1440px]">{children}</div>
-                          </main>
+        <OnboardingGate>
+          <CalendarEventProvider>
+            <SubjectProvider>
+              <DeliverableProvider>
+                <TaskProvider>
+                  <SessionProvider>
+                    <ActiveSessionProvider>
+                      <HabitProvider>
+                        <div className="flex min-h-screen w-full">
+                          <Sidebar />
+                          <div className="flex min-w-0 flex-1 flex-col">
+                            <Topbar />
+                            <main className="flex-1 px-4 pb-[96px] pt-6 md:px-8 md:pb-10 md:pt-8">
+                              <div className="mx-auto w-full max-w-[1440px]">{children}</div>
+                            </main>
+                          </div>
                         </div>
-                      </div>
-                      <MobileBottomNav />
-                      <FloatingAiButton />
-                    </HabitProvider>
-                  </ActiveSessionProvider>
-                </SessionProvider>
-              </TaskProvider>
-            </DeliverableProvider>
-          </SubjectProvider>
-        </CalendarEventProvider>
+                        <MobileBottomNav />
+                        <FloatingAiButton />
+                      </HabitProvider>
+                    </ActiveSessionProvider>
+                  </SessionProvider>
+                </TaskProvider>
+              </DeliverableProvider>
+            </SubjectProvider>
+          </CalendarEventProvider>
+        </OnboardingGate>
       </PreferencesProvider>
     </SidebarProvider>
   );

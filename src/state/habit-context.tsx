@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createRepository } from "@/persistence/repository";
 import { createSeedHabits } from "@/data/dashboard";
+import { getOnboardingChoice } from "@/persistence/onboarding";
 import { useNow } from "@/domain/use-now";
 import { toIsoDateLocal } from "@/domain/time";
 import type { Habit, HabitCadence, HabitLog } from "@/domain/types";
@@ -72,15 +73,19 @@ export function HabitProvider({ children }: { children: ReactNode }) {
         setHabits(persistedHabits);
         setLogs(persistedLogs);
         setStatus("ready");
-      } else if (now) {
-        // Genuinely first-ever run: seed definitions only, never logs — see
-        // `createSeedHabits`'s docs.
+      } else if (now && getOnboardingChoice() === "sample") {
+        // First-ever run, sample data chosen: seed definitions only, never
+        // logs — see `createSeedHabits`'s docs.
         const seeded = createSeedHabits(now);
         hydratedRef.current = true;
         setHabits(seeded);
         setLogs(persistedLogs);
         setStatus("ready");
         void habitRepository.replaceAll(seeded);
+      } else if (now) {
+        hydratedRef.current = true;
+        setLogs(persistedLogs);
+        setStatus("ready");
       }
       // else: nothing persisted and `now` isn't resolved yet — wait for the
       // next run of this effect, triggered when `useNow()` settles.

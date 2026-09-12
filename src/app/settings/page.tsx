@@ -6,6 +6,7 @@ import { SectionHeader } from "@/components/shared/section-header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataCard } from "@/components/settings/data-card";
 import { usePreferences } from "@/state/preferences-context";
 
 function hourToTimeString(hour: number): string {
@@ -174,6 +175,8 @@ export default function SettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      <DataCard />
     </div>
   );
 }

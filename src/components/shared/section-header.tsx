@@ -30,9 +30,16 @@ function SectionHeader({
     <div className={cn("flex items-start justify-between gap-4", className)}>
       <div className="flex items-start gap-3">
         {Icon ? (
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
-            <Icon className="size-4" strokeWidth={2} />
-          </span>
+          // A tinted badge is reserved for the screen's one level-2 section —
+          // repeating it on every level-3 card is what made secondary cards
+          // compete with the primary one instead of receding beneath it.
+          level === 2 ? (
+            <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
+              <Icon className="size-4" strokeWidth={2} />
+            </span>
+          ) : (
+            <Icon className="mt-1 size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+          )
         ) : null}
         <div className="flex flex-col gap-0.5">
           <Heading className={cn(headingSize, "text-foreground")}>{title}</Heading>

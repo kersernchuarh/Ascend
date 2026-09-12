@@ -42,8 +42,8 @@ function AddExistingTaskRow({ backlogTasks, onSchedule }: AddExistingTaskRowProp
       {open ? (
         <ul className="mt-2 flex max-h-[220px] flex-col gap-1 overflow-y-auto rounded-[10px] border border-border p-1.5">
           {backlogTasks.map((task) => {
-            const pillar = PILLARS[task.pillar];
-            const Icon = pillar.icon;
+            const pillar = task.pillar ? PILLARS[task.pillar] : undefined;
+            const Icon = pillar?.icon;
             return (
               <li key={task.id}>
                 <button
@@ -51,10 +51,12 @@ function AddExistingTaskRow({ backlogTasks, onSchedule }: AddExistingTaskRowProp
                   onClick={() => onSchedule(task.id)}
                   className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors hover:bg-muted"
                 >
-                  <PillBadge color={pillar.color}>
-                    <Icon className="size-3" />
-                    {pillar.label}
-                  </PillBadge>
+                  {pillar && Icon ? (
+                    <PillBadge color={pillar.color}>
+                      <Icon className="size-3" />
+                      {pillar.label}
+                    </PillBadge>
+                  ) : null}
                   <span className="truncate text-body text-foreground">{task.title}</span>
                 </button>
               </li>

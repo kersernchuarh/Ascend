@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { CalendarClock, CalendarX2 } from "lucide-react";
+import Link from "next/link";
+import { CalendarClock, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { PillBadge } from "@/components/shared/pill-badge";
@@ -74,7 +75,7 @@ function ScheduleCard() {
   }, [now, events, tasks, sessions, preferences]);
 
   return (
-    <Card id="schedule" className="w-full scroll-mt-20">
+    <Card id="schedule" className="w-full scroll-mt-20" flat>
       <CardContent>
         <SectionHeader title="Schedule" description="Today's fixed commitments" />
         {!ready ? (
@@ -83,9 +84,15 @@ function ScheduleCard() {
             <Skeleton className="h-10 w-full rounded-[10px]" />
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <CalendarX2 className="size-6 text-muted-foreground" strokeWidth={1.5} />
-            <p className="text-body text-muted-foreground">Nothing fixed on the calendar today</p>
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <p className="text-caption text-muted-foreground">Nothing fixed today</p>
+            <Link
+              href="/plan#fixed-schedule"
+              className="flex shrink-0 items-center gap-1 text-caption font-medium text-foreground transition-colors hover:text-primary"
+            >
+              <Plus className="size-3.5" />
+              Add commitment
+            </Link>
           </div>
         ) : (
           <ul className="mt-4 flex flex-col">
