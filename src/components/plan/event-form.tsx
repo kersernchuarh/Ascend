@@ -34,6 +34,15 @@ function timeStringToMinutes(value: string): number {
 type EventFormProps = {
   /** Pass an existing event to edit it in place, pre-filled. */
   initialEvent?: CalendarEvent;
+  /** The day this form should default to for a *new* commitment — set when
+   *  the user picks a specific day in the week view above, so the
+   *  destination of "Add commitment" is unambiguous. Only ever read once,
+   *  as this component's initial state: the caller (`app/plan/page.tsx`)
+   *  changes this component's `key` alongside the selected day, so picking
+   *  a different day remounts the form with the new default rather than
+   *  needing an effect to resync it — the same reset that clearing any
+   *  other in-progress, day-specific draft on a day switch would call for. */
+  initialDayOfWeek?: number;
   onSubmit: (input: EventFormInput) => void;
   onCancel?: () => void;
 };
@@ -45,9 +54,9 @@ type EventFormProps = {
  * required as the name, so hiding them behind "More" would just add a step
  * before the fast path actually works.
  */
-function EventForm({ initialEvent, onSubmit, onCancel }: EventFormProps) {
+function EventForm({ initialEvent, initialDayOfWeek, onSubmit, onCancel }: EventFormProps) {
   const [title, setTitle] = useState(initialEvent?.title ?? "");
-  const [dayOfWeek, setDayOfWeek] = useState(initialEvent?.dayOfWeek ?? 1);
+  const [dayOfWeek, setDayOfWeek] = useState(initialEvent?.dayOfWeek ?? initialDayOfWeek ?? 1);
   const [startTime, setStartTime] = useState(minutesToTimeString(initialEvent?.startMinutes ?? 8 * 60));
   const [durationMinutes, setDurationMinutes] = useState(initialEvent?.durationMinutes ?? 60);
   const [kind, setKind] = useState<CalendarEvent["kind"]>(initialEvent?.kind ?? "class");
@@ -75,37 +84,56 @@ function EventForm({ initialEvent, onSubmit, onCancel }: EventFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="New fixed commitment — e.g. Morning classes"
-          aria-label="Event title"
-          className="min-w-[200px] flex-1"
-        />
-        <Input
-          type="time"
-          value={startTime}
-          onChange={(event) => setStartTime(event.target.value)}
-          aria-label="Start time"
-          className="w-[110px]"
-        />
-        <Input
-          type="number"
-          min={5}
-          step={5}
-          value={durationMinutes}
-          onChange={(event) => setDurationMinutes(Math.max(5, Number(event.target.value) || 5))}
-          aria-label="Duration (minutes)"
-          className="w-20"
-        />
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-caption text-muted-foreground">
+          Commitment
+          <Input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="e.g. Morning classes"
+            aria-label="Event title"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-caption text-muted-foreground">
+          Start time
+          <Input
+            type="time"
+            value={startTime}
+            onChange={(event) => setStartTime(event.target.value)}
+            aria-label="Start time"
+            className="w-[120px]"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-caption text-muted-foreground">
+          Duration (min)
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="number"
+              min={5}
+              step={5}
+              value={durationMinutes}
+              onChange={(event) => setDurationMinutes(Math.max(5, Number(event.target.value) || 5))}
+              aria-label="Duration in minutes"
+              className="w-20"
+            />
+            <span className="text-caption text-muted-foreground">min</span>
+          </div>
+        </label>
         <Button
           type="submit"
-          size={initialEvent ? "sm" : "icon"}
+          size={initialEvent ? "sm" : "sm"}
+          className="gap-1.5"
           aria-label={initialEvent ? "Save changes" : "Add fixed commitment"}
           disabled={!canSubmit}
         >
-          {initialEvent ? "Save" : <Plus className="size-4" />}
+          {initialEvent ? (
+            "Save"
+          ) : (
+            <>
+              <Plus className="size-4" />
+              Add
+            </>
+          )}
         </Button>
         {onCancel ? (
           <Button type="button" variant="ghost" size="sm" onClick={onCancel}>

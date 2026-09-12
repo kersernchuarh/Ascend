@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Pause, Play, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Pause, Play, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +10,7 @@ import { TaskRow } from "@/components/dashboard/task-row";
 import { AddTaskRow, type QuickCaptureInput } from "@/components/dashboard/add-task-row";
 import { AddExistingTaskRow } from "@/components/dashboard/add-existing-task-row";
 import { UndoToast, type UndoableAction } from "@/components/shared/undo-toast";
+import { InfoHint } from "@/components/shared/info-hint";
 import { useTasks } from "@/state/task-context";
 import { useDeliverables } from "@/state/deliverable-context";
 import { useSessions } from "@/state/session-context";
@@ -125,13 +126,17 @@ function TodayPlanCard() {
           title="Today's Plan"
           description={status === "ready" ? `${completedCount}/${tasks.length} completed` : undefined}
         />
-        <p className="mt-1 text-caption text-muted-foreground">
-          You choose what&apos;s on today — Ascend doesn&apos;t build a schedule for you yet, only warns if it looks like too much.
+        <p className="mt-1 flex items-center gap-1.5 text-caption text-muted-foreground">
+          Choose your tasks for today.
+          <InfoHint label="Why isn't this scheduled automatically?">
+            Ascend doesn&apos;t build a schedule for you yet — you choose what&apos;s on today, and it only warns
+            you if the total looks like more than you have time for.
+          </InfoHint>
         </p>
         {fitMessage ? (
           <p
             className={
-              "mt-3 flex items-center gap-1.5 text-caption " +
+              "mt-2 flex items-center gap-1.5 text-caption " +
               (fitMessage.tight ? "text-orange" : "text-muted-foreground")
             }
           >
@@ -139,24 +144,23 @@ function TodayPlanCard() {
             {fitMessage.text}
           </p>
         ) : null}
+
+        {status === "ready" ? (
+          <div className="mt-4">
+            <AddTaskRow onAdd={handleAdd} />
+            <AddExistingTaskRow backlogTasks={backlogTasks} onSchedule={handleScheduleExisting} />
+          </div>
+        ) : null}
+
         {status === "loading" ? (
           <div className="mt-4 flex flex-col gap-3" aria-hidden="true">
             <Skeleton className="h-14 w-full rounded-[10px]" />
             <Skeleton className="h-14 w-full rounded-[10px]" />
-            <Skeleton className="h-14 w-full rounded-[10px]" />
           </div>
-        ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <ClipboardCheck className="size-6 text-muted-foreground" strokeWidth={1.5} />
-            <p className="text-body text-muted-foreground">Nothing on your plate today</p>
-          </div>
-        ) : allDone ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-            <ClipboardCheck className="size-6 text-primary" strokeWidth={1.5} />
-            <p className="text-caption text-muted-foreground">Add another task below if there&apos;s more to do.</p>
-          </div>
+        ) : tasks.length === 0 ? null : allDone ? (
+          <p className="mt-3 text-caption text-muted-foreground">Add another task above if there&apos;s more to do.</p>
         ) : (
-          <ul className="mt-4 md:max-h-[420px] md:overflow-y-auto">
+          <ul className="mt-2 md:max-h-[420px] md:overflow-y-auto">
             {tasks.map((task, index) => (
               <TaskRow
                 key={task.id}
@@ -189,12 +193,6 @@ function TodayPlanCard() {
             ))}
           </ul>
         )}
-        {status === "ready" ? (
-          <>
-            <AddTaskRow onAdd={handleAdd} />
-            <AddExistingTaskRow backlogTasks={backlogTasks} onSchedule={handleScheduleExisting} />
-          </>
-        ) : null}
       </CardContent>
       {lastAction ? <UndoToast action={lastAction} onDismiss={() => setLastAction(null)} /> : null}
     </Card>

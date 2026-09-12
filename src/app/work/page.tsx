@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ClipboardCheck, PartyPopper, Search, X } from "lucide-react";
+import { ChevronUp, ClipboardCheck, Plus, PartyPopper, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/shared/card";
 import { SectionHeader } from "@/components/shared/section-header";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WorkSummaryStrip } from "@/components/work/work-summary-strip";
@@ -56,6 +57,7 @@ export default function WorkPage() {
 
   const [query, setQuery] = useState("");
   const [hideCompleted, setHideCompleted] = useState(false);
+  const [showNewAssignment, setShowNewAssignment] = useState(false);
 
   const ready = deliverableStatus === "ready" && taskStatus === "ready" && now != null;
 
@@ -126,62 +128,77 @@ export default function WorkPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {ready ? (
-        <WorkSummaryStrip summary={summary} />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-hidden="true">
-          <Skeleton className="h-24 w-full rounded-card" />
-          <Skeleton className="h-24 w-full rounded-card" />
-          <Skeleton className="h-24 w-full rounded-card" />
-        </div>
-      )}
-
-      {ready && hasAnything ? (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search deliverables and tasks…"
-              aria-label="Search Work"
-              className="pl-8 pr-8"
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            ) : null}
+    <div className="flex flex-col gap-5">
+      {/* Toolbar: orientation (the summary counts), search/filter, and the
+          two primary add actions all read as one coherent unit rather than
+          separate stacked rows (PRODUCT_BLUEPRINT.md §32). */}
+      <div className="flex flex-col gap-3 border-b border-border pb-4">
+        {ready ? <WorkSummaryStrip summary={summary} /> : <Skeleton className="h-4 w-64" aria-hidden="true" />}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 items-center gap-3">
+            <div className="relative min-w-0 max-w-sm flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search assignments and tasks…"
+                aria-label="Search Work"
+                className="pl-8 pr-8"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <label className="flex shrink-0 items-center gap-1.5 text-caption text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={hideCompleted}
+                onChange={(event) => setHideCompleted(event.target.checked)}
+                className="size-3.5 rounded-[4px] border border-input"
+              />
+              Hide completed
+            </label>
           </div>
-          <label className="flex shrink-0 items-center gap-1.5 text-caption text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={hideCompleted}
-              onChange={(event) => setHideCompleted(event.target.checked)}
-              className="size-3.5 rounded-[4px] border border-input"
-            />
-            Hide completed
-          </label>
+          <div className="flex shrink-0 items-center gap-2">
+            <CreateSubjectForm onCreate={(name) => addSubject(name)} />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              aria-expanded={showNewAssignment}
+              onClick={() => setShowNewAssignment((prev) => !prev)}
+            >
+              {showNewAssignment ? <ChevronUp className="size-3.5" /> : <Plus className="size-3.5" />}
+              New assignment
+            </Button>
+          </div>
         </div>
-      ) : null}
+        {showNewAssignment ? (
+          <DeliverableForm
+            onSubmit={(input) => {
+              addDeliverable(input);
+              setShowNewAssignment(false);
+            }}
+            onCancel={() => setShowNewAssignment(false)}
+          />
+        ) : null}
+      </div>
 
       <Card emphasis>
         <CardContent className="flex flex-col gap-4">
           <SectionHeader
             level={2}
             title="Subjects"
-            description="Deliverables, grouped the way you actually think about your work"
+            description="Assignments, grouped the way you actually think about your work"
           />
-          <div className="flex flex-wrap items-center gap-3">
-            <CreateSubjectForm onCreate={(name) => addSubject(name)} />
-          </div>
-          <DeliverableForm onSubmit={(input) => addDeliverable(input)} />
 
           {!ready ? (
             <div className="flex flex-col gap-3" aria-hidden="true">
@@ -192,7 +209,7 @@ export default function WorkPage() {
             <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
               <ClipboardCheck className="size-6 text-muted-foreground" strokeWidth={1.5} />
               <p className="text-body text-muted-foreground">
-                Nothing here yet — add a subject or a deliverable to get started
+                Nothing here yet — add a subject or an assignment to get started
               </p>
             </div>
           ) : allDone ? (
@@ -206,7 +223,7 @@ export default function WorkPage() {
               <p className="text-body text-muted-foreground">Nothing matches &ldquo;{query}&rdquo;</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col">
               {visibleSubjects.map((subject) => (
                 <SubjectSection
                   key={subject.id}
@@ -224,12 +241,13 @@ export default function WorkPage() {
                   onUpdateTask={updateTask}
                   onDeleteTask={deleteTask}
                   onCreateTask={(input) => addTask(input)}
+                  onCreateDeliverable={(input) => addDeliverable(input)}
                 />
               ))}
 
               {unassigned.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-h3 text-foreground">Unassigned</h3>
+                <div className="flex flex-col gap-2 border-t border-border pt-3">
+                  <h3 className="text-caption font-medium text-muted-foreground">Unassigned</h3>
                   <ul>
                     {unassigned.map((deliverable) => (
                       <DeliverableRow
@@ -258,7 +276,7 @@ export default function WorkPage() {
       {!ready || hasAnything ? (
         <Card flat>
           <CardContent className="flex flex-col gap-4">
-            <SectionHeader title="Other tasks" description="Not tied to any deliverable" />
+            <SectionHeader title="Other tasks" description="Not tied to any assignment" />
             <TaskForm onSubmit={(input) => addTask(input)} />
             {!ready ? (
               <div className="flex flex-col gap-3" aria-hidden="true">

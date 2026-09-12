@@ -124,8 +124,9 @@ function HomeHeader() {
     : null;
 
   return (
-    <div className="flex flex-col gap-1">
-      <p className="text-caption text-muted-foreground">
+    <div className="flex flex-col gap-1.5">
+      <h2 className="text-h1 text-foreground">Today</h2>
+      <p className="text-body text-muted-foreground">
         {greeting}, {MOCK_USER.name}
         {dateLabel ? ` · ${dateLabel}` : ""}
       </p>

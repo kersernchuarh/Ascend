@@ -1115,6 +1115,38 @@ Purely additive; no migration. `domain/progress.estimateAccuracy` (Deliverable-l
 
 ---
 
+## 32. Layout refinement — Home, Work, Plan (phase inserted after Focus)
+
+Real usage feedback on phases 1-2 (design system, Focus): the screens were internally consistent but still read as sparse — empty panels and summary cards had more visual weight than the actual actions. This phase restructures Home/Work/Plan's *layout*, not their visual language (already established), and was verified against both a nearly-empty account and a populated one, in an isolated fixture — never the user's own data.
+
+**Home:**
+- `HomeHeader` now leads with a real `<h2>Today</h2>` (the greeting/date moved to supporting text beneath it) — previously the biggest visible text on the page was a section header two levels down.
+- Quick capture moved directly under the "Choose your tasks for today" line, above the task list, instead of after it — the fastest action on the page no longer requires scrolling past the thing it's about to populate.
+- The zero-tasks empty state (an icon + "Nothing on your plate today", `py-8`) is gone outright: quick capture sitting right there already says "empty, add something" without a second, larger block repeating it. Verified against a genuinely empty account — Today's Plan is now a compact, inviting card instead of a tall mostly-blank one.
+- Desktop gained a real main/side column split: Today's Plan and (when non-empty) Attention in the wider column; Schedule and Habit Tracker in a narrower supporting one. `AttentionCard` now returns `null` when there's nothing flagged, rather than rendering an "all clear" card — a screen with nothing to warn about now simply has one less section, not an empty one.
+- `ScheduleCard`'s empty state compacted to one line with a real "Add commitment" action, linking to Plan's fixed-schedule section (`/plan#fixed-schedule`).
+- The disclaimer paragraph shrank to "Choose your tasks for today." with a new click-to-open `InfoHint` (`components/shared/info-hint.tsx`) carrying the fuller "Ascend doesn't build a schedule for you" explanation — a tap-based disclosure, not a hover tooltip, since the content needs to work identically on mobile.
+
+**Work:**
+- `WorkSummaryStrip` rewritten from three full `MetricCard`s to one compact inline row — orientation, not the point of the page.
+- Search, "Hide completed", "New subject", and a new "New assignment" toggle now read as one toolbar row instead of two stacked ones.
+- `SubjectSection` is now a compact, collapsible row per subject with a count badge — collapsed by default when caught up or empty (so an empty subject costs one line, not a full "no assignments yet" block pushing real content down), open by default when it has outstanding work.
+- Each subject's own `DeliverableForm` (via a new `fixedSubjectId` prop) lives inside that subject's row, so adding an assignment to a specific subject has an unambiguous destination — the one remaining global "New assignment" form (toolbar-triggered) is for the unassigned/quick-capture case only.
+- Visible copy changed "Deliverable" → "Assignment" throughout (placeholders, aria-labels, empty states) — the underlying `Deliverable` type/prop names are unchanged; renaming those would touch every consumer for a purely cosmetic win.
+
+**Plan:**
+- Each day column is now selectable (`isSelected`/`onSelect`), independent from `isToday` (today gets a small dot marker; selection gets the primary border/tint) — clicking a day shows a clear "+ Add commitment" action inside that column, and re-keys `EventForm` (via `key={dayOfWeek}`) so its day-of-week picker defaults to match, without needing a state-sync effect.
+- Removed the per-day empty-state icon (`CalendarCheck`, repeated up to 7 times); "Nothing scheduled" is now plain text.
+- `EventForm`'s start-time and duration fields are now real `<label>`-associated fields, duration showing its "min" unit explicitly instead of a bare number.
+- "At risk" now hides itself when nothing is (mirroring Attention's approach) instead of showing a permanent "Nothing at risk right now" card.
+- Day columns' "X free" reworded to "X unscheduled" — a small but deliberate honesty fix: an empty calendar slot is unscheduled time, not a claim that it's realistically usable study capacity.
+
+**Verified:** `tsc`, `eslint`, all 196 tests, and `next build` clean. Browser-verified on both an isolated empty fixture and a populated one (a Chemistry subject with a Lab report assignment added live, through the new per-subject form, to confirm it attaches correctly), at desktop and 375px mobile. Confirmed day-selection and its "Add commitment" destination stay in sync when switching days, and that Attention/At-risk correctly vanish and reappear based on real data rather than always rendering.
+
+**Known limitations:** Plan's day-selection is page-local UI state (not persisted) — reselects today on every reload, which is the honest default. Habits' compact-glance placement on Home reuses the existing `HabitTrackerCard` as-is; the tracking squares themselves are still the oversized ones the next phase addresses. The cross-cutting "neutral secondary text" note was applied where touched in this pass, not as a separate full-codebase color audit.
+
+---
+
 ## BIGGEST CHANGES I WOULD MAKE
 
 The ten highest-impact changes, ordered by impact.

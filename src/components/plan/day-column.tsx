@@ -1,6 +1,5 @@
 "use client";
 
-import { CalendarCheck } from "lucide-react";
 import { PillBadge } from "@/components/shared/pill-badge";
 import { cn } from "@/lib/utils";
 import { formatDuration, formatTime, formatWeekdayShort } from "@/lib/format-date";
@@ -17,6 +16,11 @@ type DayColumnProps = {
   sessions: StudySession[];
   now: Date;
   prefs: FreeTimePreferences;
+  /** Whether this is the day currently selected in the week view above the
+   *  fixed-schedule form — distinct from `isToday`, which is a calendar
+   *  fact, not a UI selection. */
+  isSelected?: boolean;
+  onSelect?: () => void;
 };
 
 /**
@@ -31,7 +35,7 @@ type DayColumnProps = {
  * are forward-looking planning concepts that don't mean anything for a day
  * that's already happened.
  */
-function DayColumn({ day, events, tasks, deliverables, sessions, now, prefs }: DayColumnProps) {
+function DayColumn({ day, events, tasks, deliverables, sessions, now, prefs, isSelected, onSelect }: DayColumnProps) {
   const isToday = isSameDay(day, now);
   const isPast = startOfDay(day).getTime() < startOfDay(now).getTime();
 
@@ -55,9 +59,24 @@ function DayColumn({ day, events, tasks, deliverables, sessions, now, prefs }: D
 
   return (
     <div
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={onSelect}
+      onKeyDown={
+        onSelect
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect();
+              }
+            }
+          : undefined
+      }
+      aria-pressed={onSelect ? isSelected : undefined}
       className={cn(
-        "flex flex-col gap-2 rounded-[10px] border border-border p-3",
-        isToday && "border-primary"
+        "flex flex-col gap-2 rounded-[10px] border p-3",
+        onSelect && "cursor-pointer text-left transition-colors hover:border-[#2a3441]",
+        isSelected ? "border-primary bg-primary/[0.04]" : "border-border"
       )}
     >
       <div className="flex items-center justify-between gap-2">
@@ -68,19 +87,17 @@ function DayColumn({ day, events, tasks, deliverables, sessions, now, prefs }: D
           <span className={cn("text-body font-medium", isToday ? "text-primary" : "text-foreground")}>
             {day.getDate()}
           </span>
+          {isToday ? <span className="size-1 rounded-full bg-primary" aria-hidden="true" /> : null}
         </div>
         {conflict ? <PillBadge color="red">Conflict</PillBadge> : null}
       </div>
 
       {freeMinutes != null ? (
-        <p className="text-caption text-muted-foreground">{formatDuration(freeMinutes)} free</p>
+        <p className="text-caption text-muted-foreground">{formatDuration(freeMinutes)} unscheduled</p>
       ) : null}
 
       {nothingAtAll ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-1 py-4 text-center">
-          <CalendarCheck className="size-4 text-muted-foreground" strokeWidth={1.5} />
-          <p className="text-caption text-muted-foreground">Nothing scheduled</p>
-        </div>
+        <p className="py-2 text-caption text-muted-foreground">Nothing scheduled</p>
       ) : (
         <div className="flex flex-col gap-1.5">
           {dayEvents.map(({ event, startAt }) => (
@@ -111,6 +128,16 @@ function DayColumn({ day, events, tasks, deliverables, sessions, now, prefs }: D
           ))}
         </div>
       )}
+
+      {isSelected ? (
+        <a
+          href="#fixed-schedule"
+          onClick={(event) => event.stopPropagation()}
+          className="mt-auto flex items-center gap-1 pt-1 text-caption font-medium text-primary hover:underline"
+        >
+          + Add commitment
+        </a>
+      ) : null}
     </div>
   );
 }
