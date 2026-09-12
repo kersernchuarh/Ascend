@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createRepository } from "@/persistence/repository";
+import { appendSessionIfNew } from "@/domain/session-dedup";
 import type { StudySession } from "@/domain/types";
 
 const sessionRepository = createRepository<StudySession>("ascend:study-sessions", 1);
@@ -24,7 +25,13 @@ type SessionContextValue = {
   status: "loading" | "ready";
   /** Appends a finished session. Sessions are append-only once recorded —
    *  a logged session is a historical fact (blueprint §16) and this API
-   *  has no update/remove, deliberately. */
+   *  has no update/remove, deliberately. Idempotent by `id`: calling this
+   *  twice with a session sharing an `id` already present is a no-op the
+   *  second time — the cross-tab defense `active-session-context.tsx`
+   *  relies on (PRODUCT_BLUEPRINT.md §33), since two tabs racing to
+   *  finalize the same real session now construct the same `id` (derived
+   *  from `actualStart`, not a fresh random one), so at most one copy of it
+   *  can ever end up in this array. */
   recordSession: (session: StudySession) => void;
 };
 
@@ -59,7 +66,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [sessions]);
 
   const recordSession = useCallback((session: StudySession) => {
-    setSessions((prev) => [...prev, session]);
+    setSessions((prev) => appendSessionIfNew(prev, session));
   }, []);
 
   const value = useMemo<SessionContextValue>(

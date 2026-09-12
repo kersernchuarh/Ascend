@@ -14,7 +14,10 @@ export type PersistedActiveSession = {
   totalPausedMs: number;
 };
 
-const KEY = "ascend:active-session";
+/** Exported so `state/active-session-context.tsx` can recognize this exact
+ *  key on a cross-tab `storage` event without duplicating the string. */
+export const ACTIVE_SESSION_STORAGE_KEY = "ascend:active-session";
+const KEY = ACTIVE_SESSION_STORAGE_KEY;
 
 /**
  * Raw storage peek/poke, deliberately outside the `Repository<T>` pattern —

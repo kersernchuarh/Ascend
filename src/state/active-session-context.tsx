@@ -13,7 +13,11 @@ import {
 import { useSessions } from "@/state/session-context";
 import { isMeaningfulSessionDuration } from "@/domain/metrics";
 import { elapsedSeconds, isSessionComplete, secondsLeft as computeSecondsLeft } from "@/domain/focus-timer";
-import { getPersistedActiveSession, setPersistedActiveSession } from "@/persistence/active-session";
+import {
+  ACTIVE_SESSION_STORAGE_KEY,
+  getPersistedActiveSession,
+  setPersistedActiveSession,
+} from "@/persistence/active-session";
 import type { StudySession } from "@/domain/types";
 
 export type ActiveSession = {
@@ -130,7 +134,14 @@ export function ActiveSessionProvider({ children }: { children: ReactNode }) {
       );
       const actualEnd = outcome === "completed" ? plannedEnd : now;
       const recorded: StudySession = {
-        id: crypto.randomUUID(),
+        // `actualStart` is a real, stable identifier for the one physical
+        // Focus session it belongs to — unlike a fresh `crypto.randomUUID()`
+        // per finalize call, it's identical no matter which tab (or how many)
+        // independently finalize the same session, which is what actually
+        // lets `appendSessionIfNew` (`domain/session-dedup.ts`) guarantee at
+        // most one stored record for it (PRODUCT_BLUEPRINT.md §33) — not a
+        // race-prone check, a value both sides are guaranteed to agree on.
+        id: current.actualStart,
         taskId: current.taskId,
         intention: current.intention,
         plannedStart: current.actualStart,
@@ -150,6 +161,33 @@ export function ActiveSessionProvider({ children }: { children: ReactNode }) {
     },
     [recordSession]
   );
+
+  // Cross-tab coordination: the browser fires `storage` events in every
+  // *other* tab (never the one that made the change) whenever this key
+  // changes. If another tab clears or replaces the persisted active session
+  // while we still think one is running/paused, that tab already resolved
+  // it — most often by finalizing it first. Adopting that here (rather than
+  // letting our own live-tick effect race to finalize it independently)
+  // is the actual cross-tab coordination PRODUCT_BLUEPRINT.md §33 asks
+  // for: a real signal from the other tab, not a hope that timing works out.
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== ACTIVE_SESSION_STORAGE_KEY) return;
+      setSession((prev) => {
+        if (!prev) return prev;
+        const latest = getPersistedActiveSession();
+        // Still the same session (e.g. a pause/resume/extend from this same
+        // change) — nothing to adopt.
+        if (latest && latest.actualStart === prev.actualStart) return prev;
+        // Gone, or replaced by a different session entirely: someone else
+        // already handled ours. Don't attempt to finalize it ourselves.
+        recordedRef.current = true;
+        return null;
+      });
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   // Live ticking clock, alive only while a session is actually running —
   // not tied to `/focus` being the current route, which is what lets Home

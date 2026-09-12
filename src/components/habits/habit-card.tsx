@@ -85,8 +85,8 @@ function HabitCard({
           <Icon className="size-4" strokeWidth={2} />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-body text-foreground">{habit.label}</span>
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <span className="min-w-0 truncate text-body text-foreground">{habit.label}</span>
             {streak > 0 ? (
               <span className="shrink-0 text-caption font-medium text-primary">
                 {streak} {streakUnit}
@@ -102,7 +102,7 @@ function HabitCard({
               </span>
             ) : null}
           </div>
-          {habit.description ? <p className="text-caption text-muted-foreground">{habit.description}</p> : null}
+          {habit.description ? <p className="truncate text-caption text-muted-foreground">{habit.description}</p> : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <Button variant="ghost" size="icon-xs" aria-label={`Edit ${habit.label}`} onClick={() => setEditing(true)}>

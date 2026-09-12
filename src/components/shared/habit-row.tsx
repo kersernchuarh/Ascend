@@ -48,11 +48,11 @@ function HabitRow({
         <Icon className="size-4" strokeWidth={2} />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-center justify-between gap-2 text-body">
+        <div className="flex min-w-0 items-center justify-between gap-2 text-body">
           <span
             className={cn(
-              "text-foreground",
-              completed && "text-muted-foreground"
+              "min-w-0 truncate",
+              completed ? "text-muted-foreground" : "text-foreground"
             )}
           >
             {habit.label}
